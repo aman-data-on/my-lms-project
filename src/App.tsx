@@ -1,20 +1,29 @@
-import { } from 'react';
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Sidebar from './components/Sidebar';
-import AuthPage from './pages/AuthPage';
-import Dashboard from './pages/Dashboard';
-import MyCourses from './pages/MyCourses';
-import CourseLibrary from './pages/CourseLibrary';
-import CourseDetail from './pages/CourseDetail';
-import SalesOnboardingCourse from './pages/SalesOnboardingCourse';
-import Assessments from './pages/Assessments';
-import Certificates from './pages/Certificates';
-import Reports from './pages/Reports';
-import Settings from './pages/Settings';
-import AdminPanel from './pages/AdminPanel';
-import CourseBuilder from './pages/CourseBuilder';
+
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const MyCourses = lazy(() => import('./pages/MyCourses'));
+const CourseLibrary = lazy(() => import('./pages/CourseLibrary'));
+const CourseDetail = lazy(() => import('./pages/CourseDetail'));
+const SalesOnboardingCourse = lazy(() => import('./pages/SalesOnboardingCourse'));
+const Assessments = lazy(() => import('./pages/Assessments'));
+const Certificates = lazy(() => import('./pages/Certificates'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const CourseBuilder = lazy(() => import('./pages/CourseBuilder'));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -57,6 +66,7 @@ function RouteWrappers() {
   };
 
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/" element={<RequireAuth><Dashboard onNavigate={mapNavigate} /></RequireAuth>} />
@@ -71,6 +81,7 @@ function RouteWrappers() {
       <Route path="/course-builder" element={<RequireAuth><RequireAdmin><CourseBuilder onNavigate={mapNavigate} /></RequireAdmin></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 
