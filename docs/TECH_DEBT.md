@@ -10,27 +10,9 @@ The application has accumulated technical debt from rapid development. While the
 
 ## 1. ARCHITECTURE DEBT
 
-### 1.1 No URL-Based Routing
-**Severity:** 🔴 Critical  
-**Impact:** App state lost on refresh, not shareable, poor SEO, difficult debugging
-
-**Current:**
-```typescript
-const [activePage, setActivePage] = useState('dashboard');
-const handleNavigate = (page: string, data?: any) => {
-  setActivePage(page);
-  setPageData(data || null);
-};
-```
-
-**Debt Cost:** 
-- Every time user refreshes, page resets to dashboard
-- Cannot share course links
-- Browser back/forward buttons broken
-- Deep linking not possible
-
-**Refactoring Effort:** High (2-3 days)  
-**Priority:** P0 (Critical)
+### 1.1 ~~No URL-Based Routing~~ — RESOLVED (Phase 1, commit `f5f0833`)
+**Status:** ✅ Closed  
+React Router v6 implemented with `<Routes>`/`<Route>`, `RequireAuth` and `RequireAdmin` guards, and `NavLink`-based sidebar navigation.
 
 ---
 
@@ -153,24 +135,9 @@ if (error) return <div>Error</div>; // No detail
 
 ---
 
-### 2.4 Missing Validation & Sanitization
-**Severity:** 🔴 Critical  
-**Impact:** XSS vulnerability in rich text blocks, data integrity issues
-
-**Current:**
-```typescript
-// Text blocks accept raw HTML
-{ type: 'text', data: { html: userInput } }
-// No sanitization!
-```
-
-**Debt Cost:**
-- XSS security vulnerability
-- Data corruption possible
-- GDPR/compliance issues
-
-**Refactoring Effort:** Low (1 day)  
-**Priority:** P0 (Critical)
+### 2.4 ~~Missing Validation & Sanitization~~ — RESOLVED (P1, commit `3d3d125`)
+**Status:** ✅ Closed  
+DOMPurify installed (`dompurify@3.4.11`). `src/lib/sanitize.ts` exports `safeHtml()` which wraps all seven `dangerouslySetInnerHTML` callsites across `BlockRenderer.tsx`, `BlockEditor.tsx`, `CourseDetail.tsx`, and `SalesOnboardingCourse.tsx`.
 
 ---
 
@@ -341,45 +308,28 @@ if (error) return <div>Error</div>; // No detail
 
 ## 7. SECURITY DEBT
 
-### 7.1 No Input Sanitization
-**Severity:** 🔴 Critical  
-**Impact:** XSS vulnerabilities, data corruption
-
-**Locations:**
-- Rich text blocks (html allowed)
-- Form inputs (no sanitization visible)
-- User-generated content (no filtering)
-
-**Debt Cost:**
-- Security breach possible
-- GDPR violation (PII exposure)
-- Compliance issues
-
-**Refactoring Effort:** Low (1 day with DOMPurify)  
-**Priority:** P0 (Critical)
+### 7.1 ~~No Input Sanitization~~ — RESOLVED (P1, commit `3d3d125`)
+**Status:** ✅ Closed  
+See §2.4 above.
 
 ---
 
-### 7.2 Backend Authorization Missing
-**Severity:** 🔴 Critical  
-**Impact:** Users can bypass admin controls at UI level
+### 7.2 Admin Authorization — PARTIALLY RESOLVED (P1, commit `dd2a930`)
+**Status:** ⚠️ Frontend closed; DB-level open
 
-**Current:**
-```typescript
-if (isAdmin) {
-  // Show admin panel
-}
+**Closed:** `RequireAdmin` route guard in `App.tsx` prevents non-admin users from reaching `/admin` and `/course-builder` via the UI.
+
+**Remaining:** A user who calls the Supabase API directly (e.g. via `curl`) could update their own `profiles.role` to `'admin'` if no RLS policy blocks self-modification of the role column. This cannot be fixed from the frontend.
+
+**Required action (database operator):**
+```sql
+CREATE POLICY "users cannot update their own role"
+ON profiles FOR UPDATE
+USING (auth.uid() = id)
+WITH CHECK (role = (SELECT role FROM profiles WHERE id = auth.uid()));
 ```
 
-**Issue:** User can modify local state to access admin features
-
-**Debt Cost:**
-- Security vulnerability
-- Compliance issues
-- Data breach risk
-
-**Refactoring Effort:** High (2-3 days to add backend checks)  
-**Priority:** P0 (Critical)
+**Priority:** P0 (open — DB operator must apply before production)
 
 ---
 
@@ -553,24 +503,26 @@ const DEPARTMENTS = ['HR', 'IT', 'Finance', 'Sales', 'Operations', 'Marketing'];
 
 ## Technical Debt Summary Table
 
-| Debt Item | Severity | Effort | Priority | Impact |
+| Debt Item | Severity | Effort | Priority | Status |
 |-----------|----------|--------|----------|--------|
-| No URL routing | 🔴 Critical | High | P0 | App state lost |
-| No API layer | 🔴 Critical | High | P0 | Scattered logic |
-| Input sanitization | 🔴 Critical | Low | P0 | XSS vulnerability |
-| Backend auth | 🔴 Critical | High | P0 | Security bypass |
-| No code splitting | 🟡 High | Medium | P1 | Slow load time |
-| No caching | 🟡 High | Medium | P1 | Slow navigation |
-| Inconsistent errors | 🟡 High | Medium | P1 | Poor UX |
-| No components | 🟡 High | High | P1 | Maintenance hard |
-| Mobile not optimized | 🟡 High | High | P1 | Poor UX |
-| Heavy dependencies | 🟡 High | Low | P1 | Large bundle |
-| No testing | 🔴 Critical | Very High | P1* | Risky refactoring |
-| Hardcoded values | 🟡 High | Medium | P2 | Scaling hard |
-| Duplicate code | 🟠 Medium | Medium | P2 | Maintenance |
-| No error tracking | 🟠 Medium | Low | P2 | Unknown issues |
-| Accessibility | 🟠 Medium | High | P1 | Legal liability |
-| Documentation | 🟠 Medium | Low | P2 | Onboarding hard |
+| ~~No URL routing~~ | 🔴 Critical | High | P0 | ✅ Resolved (Phase 1) |
+| ~~Input sanitization (XSS)~~ | 🔴 Critical | Low | P0 | ✅ Resolved (P1 `3d3d125`) |
+| ~~No error boundary~~ | 🟡 High | Low | P1 | ✅ Resolved (P1 `4eb9b45`) |
+| ~~Admin UI bypass~~ | 🔴 Critical | Low | P0 | ✅ Frontend resolved (P1 `dd2a930`) |
+| `profiles.role` RLS missing | 🔴 Critical | Low | P0 | ⚠️ Open — DB operator required |
+| No API layer | 🔴 Critical | High | P0 | ⚠️ Partial (api.ts + react-query for 2 pages) |
+| No code splitting | 🟡 High | Medium | P1 | Open |
+| No caching | 🟡 High | Medium | P1 | ⚠️ Partial (Dashboard + CourseDetail) |
+| Inconsistent errors | 🟡 High | Medium | P1 | Open |
+| No components | 🟡 High | High | P1 | Open |
+| Mobile not optimized | 🟡 High | High | P1 | Open |
+| Heavy dependencies | 🟡 High | Low | P1 | Open |
+| No testing | 🔴 Critical | Very High | P1* | Open |
+| Hardcoded values | 🟡 High | Medium | P2 | Open |
+| Duplicate code | 🟠 Medium | Medium | P2 | Open |
+| No error tracking | 🟠 Medium | Low | P2 | Open (ErrorBoundary stub ready) |
+| Accessibility | 🟠 Medium | High | P1 | Open |
+| Documentation | 🟠 Medium | Low | P2 | Open |
 
 *P1 but lower than critical fixes
 

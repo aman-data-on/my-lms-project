@@ -69,8 +69,8 @@
 
 ```
 src/
-├── main.tsx              # Entry point
-├── App.tsx               # Main router & layout
+├── main.tsx              # Entry point — QueryClientProvider wraps App
+├── App.tsx               # BrowserRouter, route definitions, RequireAuth/RequireAdmin guards
 ├── index.css             # Tailwind + global styles
 │
 ├── contexts/
@@ -82,10 +82,10 @@ src/
 │
 ├── pages/ (12 pages - route views)
 │   ├── AuthPage.tsx              # Sign in/Sign up
-│   ├── Dashboard.tsx             # Main dashboard
+│   ├── Dashboard.tsx             # Main dashboard (react-query)
 │   ├── MyCourses.tsx             # Enrolled courses
 │   ├── CourseLibrary.tsx         # Browse courses
-│   ├── CourseDetail.tsx          # Course content viewer
+│   ├── CourseDetail.tsx          # Course content viewer (react-query)
 │   ├── SalesOnboardingCourse.tsx # Sales-specific course
 │   ├── Assessments.tsx           # Assessment list & taking
 │   ├── Certificates.tsx          # Certificate management
@@ -94,15 +94,18 @@ src/
 │   ├── AdminPanel.tsx            # Admin controls
 │   └── CourseBuilder.tsx         # Course editing
 │
-├── components/ (5 shared components)
-│   ├── Sidebar.tsx           # Navigation sidebar
-│   ├── BlockRenderer.tsx      # Renders content blocks
-│   ├── BlockEditor.tsx        # Edits content blocks
+├── components/ (7 shared components)
+│   ├── Sidebar.tsx           # Navigation sidebar (NavLink-based)
+│   ├── BlockRenderer.tsx      # Renders content blocks (DOMPurify sanitized)
+│   ├── BlockEditor.tsx        # Edits content blocks (DOMPurify sanitized)
 │   ├── CourseIndex.tsx        # Course navigation index
-│   └── CourseAppendix.tsx     # Course appendix section
+│   ├── CourseAppendix.tsx     # Course appendix section
+│   └── ErrorBoundary.tsx      # Global error boundary (class component)
 │
 ├── lib/ (Business logic & services)
 │   ├── supabase.ts           # Supabase client + types
+│   ├── api.ts                # Centralized Supabase service facade (Phase 1)
+│   ├── sanitize.ts           # safeHtml() — DOMPurify wrapper (P1 security fix)
 │   ├── blocks.ts             # Content block definitions
 │   ├── reportData.ts         # LocalStorage data helpers
 │   └── utils.ts              # Formatting utilities
@@ -153,46 +156,46 @@ AuthContext {
 
 ## Routing Architecture
 
-### Current Routing
+### Current Routing (Phase 1 — React Router v6)
 
-**Pattern:** Manual page switching in App.tsx (NOT React Router)
+**Pattern:** React Router v6 with `<Routes>`/`<Route>`, URL-based navigation via `useNavigate`, and route guards.
 
 ```typescript
-// App.tsx route handling
-const [activePage, setActivePage] = useState('dashboard');
-const handleNavigate = (page: string, data?: any) => {
-  setActivePage(page);
-  setPageData(data || null);
-};
-
-switch (activePage) {
-  case 'dashboard': return <Dashboard onNavigate={handleNavigate} />;
-  case 'my-courses': return <MyCourses onNavigate={handleNavigate} />;
-  case 'course-detail': return <CourseDetail courseId={data.courseId} />;
-  // ... etc
-}
+// App.tsx — RouteWrappers component
+<Routes>
+  <Route path="/auth" element={<AuthPage />} />
+  <Route path="/" element={<RequireAuth><Dashboard onNavigate={mapNavigate} /></RequireAuth>} />
+  <Route path="/my-courses" element={<RequireAuth><MyCourses onNavigate={mapNavigate} /></RequireAuth>} />
+  <Route path="/course-library" element={<RequireAuth><CourseLibrary onNavigate={mapNavigate} /></RequireAuth>} />
+  <Route path="/course/:courseId" element={<RequireAuth><CourseRouteWrapper onNavigate={mapNavigate} /></RequireAuth>} />
+  <Route path="/assessments" element={<RequireAuth><Assessments onNavigate={mapNavigate} /></RequireAuth>} />
+  <Route path="/certificates" element={<RequireAuth><Certificates /></RequireAuth>} />
+  <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
+  <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+  <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminPanel onNavigate={mapNavigate} /></RequireAdmin></RequireAuth>} />
+  <Route path="/course-builder" element={<RequireAuth><RequireAdmin><CourseBuilder onNavigate={mapNavigate} /></RequireAdmin></RequireAuth>} />
+  <Route path="*" element={<Navigate to="/" replace />} />
+</Routes>
 ```
 
-**Routes Available:**
-- `/` → dashboard
-- `my-courses` → MyCourses
-- `course-library` → CourseLibrary
-- `course-detail` (with courseId) → CourseDetail
-- `assessments` → Assessments
-- `certificates` → Certificates
-- `reports` → Reports
-- `settings` → Settings
-- `admin` → AdminPanel (admin only)
-- `course-builder` (with editingCourseId) → CourseBuilder
+**Route Guards:**
+- `RequireAuth` — checks `user` from `AuthContext`; redirects unauthenticated users to `/auth`.
+- `RequireAdmin` — checks `isAdmin` from `AuthContext`; redirects non-admin authenticated users to `/`.
 
-**Issues Identified:**
-- ⚠️ No URL-based routing (state lost on page refresh)
-- ⚠️ No browser history support
-- ⚠️ Not SEO-friendly
-- ⚠️ No deep linking capability
-- ⚠️ Difficult to share links with specific states
-- ⚠️ Hard to debug route state
-- ⚠️ No route guards or middleware
+**Routes Available:**
+- `/` → Dashboard (auth required)
+- `/my-courses` → MyCourses (auth required)
+- `/course-library` → CourseLibrary (auth required)
+- `/course/:courseId` → CourseDetail or SalesOnboardingCourse (auth required; special-cased by ID)
+- `/assessments` → Assessments (auth required)
+- `/certificates` → Certificates (auth required)
+- `/reports` → Reports (auth required)
+- `/settings` → Settings (auth required)
+- `/admin` → AdminPanel (auth + admin required)
+- `/course-builder` → CourseBuilder (auth + admin required)
+- `*` → redirect to `/`
+
+**Note:** Pages still receive an `onNavigate` adapter prop for legacy compatibility. This can be removed incrementally as pages adopt `useNavigate` directly.
 
 ---
 
@@ -407,8 +410,13 @@ interface BlockBase {
 
 **Authorization**
 - ✅ Role-based access control (admin/employee)
-- ✅ Admin-only pages checked at UI level
-- ✅ Reserved email list (admin@company.com)
+- ✅ Admin-only routes guarded by `RequireAdmin` at route level (P1 fix — `dd2a930`)
+- ✅ Admin-only routes additionally guarded by `RequireAuth` (session check before role check)
+- ✅ Reserved email list (`RESERVED_EMAILS` in `AuthContext.tsx:36`)
+
+**XSS Prevention**
+- ✅ All `dangerouslySetInnerHTML` callsites sanitized via `safeHtml()` in `src/lib/sanitize.ts` (P1 fix — `3d3d125`)
+- ✅ DOMPurify with `USE_PROFILES: { html: true }` — strips script tags, event handlers, and dangerous attributes
 
 **Data Access**
 - ✅ Row-Level Security (RLS) enabled in Supabase
@@ -416,17 +424,14 @@ interface BlockBase {
 - ⚠️ Course data accessible to all authenticated users
 - ⚠️ Enrollment restrictions not enforced at DB level
 
-### Security Issues Found:**
-- ⚠️ No input validation/sanitization
+**Remaining Security Issues:**
 - ⚠️ No CSRF protection visible
 - ⚠️ No rate limiting on auth endpoints
-- ⚠️ Admin check only at UI level (should be backend)
+- ⚠️ `profiles.role` self-write not blocked at DB level — requires RLS policy (see CHANGELOG P1 Fix 3 for exact SQL)
 - ⚠️ Sensitive data in localStorage (reportData)
 - ⚠️ No API key rotation strategy
 - ⚠️ No request signing/verification
 - ⚠️ Environment variables not typed/validated
-- ⚠️ No XSS protection on rich text (html2canvas usage)
-- ⚠️ No SQL injection prevention documented
 
 ---
 
@@ -491,39 +496,36 @@ VITE_SUPABASE_ANON_KEY
 
 ## Key Architectural Issues
 
-### Critical Issues
-1. **No URL-based routing** - App state lost on refresh
-2. **No API abstraction** - Direct Supabase calls everywhere
-3. **No centralized state management** - Prop drilling, data inconsistency
-4. **No error handling strategy** - Inconsistent error management
-5. **Authorization at UI level only** - Security bypass risk
+### Resolved (P1 complete)
+- ~~**No URL-based routing**~~ → React Router v6 with `RequireAuth` + `RequireAdmin` guards (Phase 1, P1)
+- ~~**XSS via unsanitized HTML**~~ → DOMPurify `safeHtml()` at all `dangerouslySetInnerHTML` sites (P1 `3d3d125`)
+- ~~**No error boundary**~~ → Global `ErrorBoundary` wrapping `AuthProvider` (P1 `4eb9b45`)
+- ~~**Authorization at UI level only**~~ → Route-level `RequireAdmin` guard added (P1 `dd2a930`)
 
-### High Priority Issues
-6. **No component library** - No design system enforcement
-7. **No loading/error states** - Poor UX during async operations
-8. **LocalStorage for critical data** - Data loss risk
-9. **No data caching** - Performance impact, unnecessary queries
-10. **No request deduplication** - Multiple identical queries
+### Critical Issues (open)
+1. **No API abstraction** - Direct Supabase calls in most pages (partial: api.ts + react-query for Dashboard/CourseDetail)
+2. **`profiles.role` self-write not blocked at DB level** - Requires RLS policy (see CHANGELOG P1 Fix 3)
+3. **No centralized state management** - Prop drilling, data inconsistency across most pages
 
-### Medium Priority Issues
-11. No lazy loading of routes
-12. No performance monitoring
-13. No error tracking/logging
-14. Inconsistent styling patterns
-15. No test infrastructure
+### High Priority Issues (open)
+4. **No component library** - No design system enforcement
+5. **No loading/error states** - Poor UX during async operations (partially resolved by react-query on Dashboard + CourseDetail)
+6. **LocalStorage for critical data** - Data loss risk
+7. **No data caching** - Most pages still fetch without caching
+
+### Medium Priority Issues (open)
+8. No lazy loading of routes
+9. No performance monitoring
+10. No error tracking/logging (ErrorBoundary stubs `Sentry.captureException` — Phase 5)
+11. Inconsistent styling patterns
+12. No test infrastructure
 
 ---
 
-## Recommendations for Phase 1 (Audit Complete)
+## Recommendations for Phase 2 (Next)
 
-1. **Implement React Router** - URL-based routing
-2. **Create API service layer** - Abstraction over Supabase
-3. **Add error boundaries** - Graceful error handling
-4. **Implement loading states** - Consistent UX
-5. **Create component library** - Design system compliance
-6. **Add request deduplication** - Performance improvement
-7. **Move critical data to DB** - Reliability improvement
-8. **Add input validation** - Security hardening
-9. **Implement error tracking** - Observability
-10. **Add performance monitoring** - Identify bottlenecks
+1. **Create API service layer** - Migrate remaining pages to `src/lib/api.ts` + react-query
+2. **Lazy-load heavy dependencies** - `jspdf` + `html2canvas` only on Certificates page
+3. **Code splitting** - Route-level `React.lazy` + `Suspense`
+4. **Apply `profiles.role` RLS policy** - Database operator task (SQL in CHANGELOG P1 Fix 3)
 
