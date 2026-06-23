@@ -451,6 +451,7 @@ interface BlockBase {
 - No data caching strategy
 - LocalStorage for some data (offline support weak)
 - No request deduplication
+- `Dashboard.tsx` has now been migrated to `@tanstack/react-query` using a centralized `fetchDashboardData()` wrapper, introducing query caching and request deduplication for dashboard data.
 
 **Assets**
 - ⚠️ No image optimization visible

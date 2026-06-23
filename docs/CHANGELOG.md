@@ -46,6 +46,8 @@
 
 - Expected impact: Reduced duplicate network calls, improved perceived performance via caching, standardized loading/error states, and a clear pattern for future data fetching refactors.
 
+- Validation: `npm run build` completed successfully after the Dashboard migration, confirming the `react-query` integration and production build pipeline.
+
 - Next steps:
   1. Run `npm install` to add new packages.
   2. Incrementally migrate other pages to use `react-query` and `src/lib/api.ts`.

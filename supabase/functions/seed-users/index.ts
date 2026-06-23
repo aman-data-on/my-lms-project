@@ -28,6 +28,16 @@ const SEED_USERS = [
     role: "employee",
     onboarding_batch: "Batch June 2026",
   },
+  {
+    email: "test.user@company.com",
+    password: "12345678",
+    full_name: "Test User",
+    employee_id: "TEST-001",
+    department: "QA",
+    job_title: "Test User",
+    role: "employee",
+    onboarding_batch: "Test Batch",
+  },
 ];
 
 Deno.serve(async (req: Request) => {
