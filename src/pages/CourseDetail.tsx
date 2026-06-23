@@ -1,6 +1,14 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  fetchCourse,
+  fetchLessons,
+  fetchLessonProgress,
+  upsertLessonProgress,
+  upsertEnrollment,
+  insertActivity,
+} from '../lib/api';
 import { pushLessonCompletion, markLessonCompleteInProgress } from '../lib/reportData';
 import {
   ChevronLeft, Play, FileText, HelpCircle, CheckCircle2, Lock,
@@ -204,34 +212,25 @@ function LessonContent({
 
 export default function CourseDetail({ courseId, onNavigate }: { courseId: string; onNavigate: (page: string, data?: any) => void }) {
   const { user, isAdmin } = useAuth();
-  const [course, setCourse] = useState<Course | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [showCongrats, setShowCongrats] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const queryClient = useQueryClient();
+
+  const { data: course, isLoading: courseLoading } = useQuery(['course', courseId], () => fetchCourse(courseId), { enabled: !!user && !!courseId });
+  const { data: lessons = [], isLoading: lessonsLoading } = useQuery(['lessons', courseId], () => fetchLessons(courseId), { enabled: !!user && !!courseId });
+  const { data: progressData = [], isLoading: progressLoading } = useQuery(['progress', user?.id], () => fetchLessonProgress(user!.id), { enabled: !!user });
+
+  const loading = courseLoading || lessonsLoading || progressLoading;
+  const completedLessons = useMemo(() => new Set((progressData || []).map((p: any) => p.lesson_id)), [progressData]);
 
   useEffect(() => {
-    const fetch = async () => {
-      if (!user) return;
-      const { data: courseData } = await supabase.from('courses').select('*').eq('id', courseId).single();
-      const { data: lessonData } = await supabase.from('lessons').select('*').eq('course_id', courseId).order('order_index');
-      const { data: progressData } = await supabase.from('lesson_progress').select('lesson_id').eq('user_id', user.id).eq('completed', true);
-
-      setCourse(courseData);
-      setLessons(lessonData || []);
-      setCompletedLessons(new Set((progressData || []).map((p: any) => p.lesson_id)));
-
-      // Find the first incomplete lesson or default to first lesson
-      const completedSet = new Set((progressData || []).map((p: any) => p.lesson_id));
-      const firstIncomplete = (lessonData || []).findIndex(l => !completedSet.has(l.id));
-      setCurrentLessonIndex(firstIncomplete >= 0 ? firstIncomplete : 0);
-
-      setLoading(false);
-    };
-    fetch();
-  }, [courseId, user]);
+    if (!user) return;
+    // Find the first incomplete lesson or default to first lesson when data loads
+    const completedSet = new Set((progressData || []).map((p: any) => p.lesson_id));
+    const firstIncomplete = (lessons || []).findIndex((l: any) => !completedSet.has(l.id));
+    setCurrentLessonIndex(firstIncomplete >= 0 ? firstIncomplete : 0);
+  }, [lessons, progressData, user]);
 
   const progressPercent = lessons.length > 0 ? Math.round((completedLessons.size / lessons.length) * 100) : 0;
 
@@ -247,55 +246,55 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
   const markCompleteAndContinue = async () => {
     if (!user || !currentLesson) return;
 
-    // Mark current lesson as complete
-    if (!completedLessons.has(currentLesson.id)) {
-      await supabase.from('lesson_progress').upsert({
-        user_id: user.id,
-        lesson_id: currentLesson.id,
-        completed: true,
-        completed_at: new Date().toISOString(),
-      });
-      setCompletedLessons(prev => new Set([...prev, currentLesson.id]));
-      pushLessonCompletion(user.id, currentLesson.id, courseId, currentLesson.duration || null);
-      markLessonCompleteInProgress(user.id, courseId, currentLesson.id);
-    }
+    try {
+      // Mark current lesson as complete
+      if (!completedLessons.has(currentLesson.id)) {
+        await upsertLessonProgress({
+          user_id: user.id,
+          lesson_id: currentLesson.id,
+          completed: true,
+          completed_at: new Date().toISOString(),
+        });
+        // Invalidate progress query so UI updates
+        queryClient.invalidateQueries(['progress', user.id]);
+        pushLessonCompletion(user.id, currentLesson.id, courseId, currentLesson.duration || null);
+        markLessonCompleteInProgress(user.id, courseId, currentLesson.id);
+      }
 
-    // Calculate new progress
-    const newCompletedCount = completedLessons.size + 1;
-    const newProgress = Math.round((newCompletedCount / lessons.length) * 100);
+      // Recompute progress from latest cached data
+      const newCompletedCount = (completedLessons.size || 0) + (completedLessons.has(currentLesson.id) ? 0 : 1);
+      const newProgress = Math.round((newCompletedCount / lessons.length) * 100);
 
-    // Check if course is complete
-    if (newCompletedCount === lessons.length) {
-      // Course completed
-      await supabase.from('enrollments').upsert({
-        user_id: user.id,
-        course_id: courseId,
-        progress_percent: 100,
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      });
-
-      await supabase.from('activities').insert({
-        user_id: user.id,
-        type: 'course_completed',
-        title: 'Completed a course',
-        description: course?.title,
-      });
-
-      setShowCongrats(true);
-    } else {
-      // Update progress
-      const status = newProgress === 100 ? 'completed' : 'in_progress';
-      await supabase.from('enrollments').upsert({
-        user_id: user.id,
-        course_id: courseId,
-        progress_percent: newProgress,
-        status,
-        completed_at: status === 'completed' ? new Date().toISOString() : null,
-      });
-
-      // Move to next lesson
-      setCurrentLessonIndex(currentLessonIndex + 1);
+      if (newCompletedCount === lessons.length) {
+        await upsertEnrollment({
+          user_id: user.id,
+          course_id: courseId,
+          progress_percent: 100,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        });
+        await insertActivity({
+          user_id: user.id,
+          type: 'course_completed',
+          title: 'Completed a course',
+          description: course?.title,
+        });
+        queryClient.invalidateQueries(['enrollments', user.id]);
+        setShowCongrats(true);
+      } else {
+        const status = newProgress === 100 ? 'completed' : 'in_progress';
+        await upsertEnrollment({
+          user_id: user.id,
+          course_id: courseId,
+          progress_percent: newProgress,
+          status,
+          completed_at: status === 'completed' ? new Date().toISOString() : null,
+        });
+        queryClient.invalidateQueries(['enrollments', user.id]);
+        setCurrentLessonIndex(currentLessonIndex + 1);
+      }
+    } catch (err) {
+      console.error('Error marking lesson complete', err);
     }
   };
 
