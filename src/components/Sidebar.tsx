@@ -28,7 +28,7 @@ const baseNavItems = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
+export default function Sidebar() {
   const { user, signOut, isAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 

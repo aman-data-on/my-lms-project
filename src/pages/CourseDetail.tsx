@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchCourse,
   fetchLessons,
@@ -217,18 +217,18 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const queryClient = useQueryClient();
 
-  const { data: course, isLoading: courseLoading } = useQuery(['course', courseId], () => fetchCourse(courseId), { enabled: !!user && !!courseId });
-  const { data: lessons = [], isLoading: lessonsLoading } = useQuery(['lessons', courseId], () => fetchLessons(courseId), { enabled: !!user && !!courseId });
-  const { data: progressData = [], isLoading: progressLoading } = useQuery(['progress', user?.id], () => fetchLessonProgress(user!.id), { enabled: !!user });
+  const { data: course, isLoading: courseLoading } = useQuery<Course>({ queryKey: ['course', courseId], queryFn: () => fetchCourse(courseId), enabled: !!user && !!courseId });
+  const { data: lessons = [], isLoading: lessonsLoading } = useQuery<Lesson[]>({ queryKey: ['lessons', courseId], queryFn: () => fetchLessons(courseId), enabled: !!user && !!courseId });
+  const { data: progressData = [], isLoading: progressLoading } = useQuery<any[]>({ queryKey: ['progress', user?.id], queryFn: () => fetchLessonProgress(user!.id), enabled: !!user });
 
   const loading = courseLoading || lessonsLoading || progressLoading;
-  const completedLessons = useMemo(() => new Set((progressData || []).map((p: any) => p.lesson_id)), [progressData]);
+  const completedLessons = useMemo(() => new Set<string>((progressData || []).map((p: any) => p.lesson_id)), [progressData]);
 
   useEffect(() => {
     if (!user) return;
     // Find the first incomplete lesson or default to first lesson when data loads
-    const completedSet = new Set((progressData || []).map((p: any) => p.lesson_id));
-    const firstIncomplete = (lessons || []).findIndex((l: any) => !completedSet.has(l.id));
+    const completedSet = new Set<string>((progressData || []).map((p: any) => p.lesson_id));
+    const firstIncomplete = (lessons || []).findIndex((l: Lesson) => !completedSet.has(l.id));
     setCurrentLessonIndex(firstIncomplete >= 0 ? firstIncomplete : 0);
   }, [lessons, progressData, user]);
 
@@ -256,7 +256,7 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
           completed_at: new Date().toISOString(),
         });
         // Invalidate progress query so UI updates
-        queryClient.invalidateQueries(['progress', user.id]);
+        queryClient.invalidateQueries({ queryKey: ['progress', user.id] });
         pushLessonCompletion(user.id, currentLesson.id, courseId, currentLesson.duration || null);
         markLessonCompleteInProgress(user.id, courseId, currentLesson.id);
       }
@@ -279,7 +279,7 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
           title: 'Completed a course',
           description: course?.title,
         });
-        queryClient.invalidateQueries(['enrollments', user.id]);
+        queryClient.invalidateQueries({ queryKey: ['enrollments', user.id] });
         setShowCongrats(true);
       } else {
         const status = newProgress === 100 ? 'completed' : 'in_progress';
@@ -290,7 +290,7 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
           status,
           completed_at: status === 'completed' ? new Date().toISOString() : null,
         });
-        queryClient.invalidateQueries(['enrollments', user.id]);
+        queryClient.invalidateQueries({ queryKey: ['enrollments', user.id] });
         setCurrentLessonIndex(currentLessonIndex + 1);
       }
     } catch (err) {
