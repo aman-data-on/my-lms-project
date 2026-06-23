@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { fetchDashboardData } from '../lib/api';
 import { formatTimeAgo, formatDate } from '../lib/utils';
 import {
   BookOpen, Award, ClipboardCheck, Clock, ArrowRight, Play, Calendar, TrendingUp,
@@ -43,97 +43,30 @@ interface UpcomingItem {
 
 export default function Dashboard({ onNavigate }: { onNavigate: (page: string, data?: any) => void }) {
   const { user } = useAuth();
-  const [stats, setStats] = useState<DashboardStats>({ coursesEnrolled: 0, coursesCompleted: 0, certificatesEarned: 0, pendingAssessments: 0 });
-  const [continueCourse, setContinueCourse] = useState<CourseWithProgress | null>(null);
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      if (!user) return;
-      setLoading(true);
+  const { data: dashboardData, isLoading } = useQuery<{
+    stats: DashboardStats;
+    continueCourse: CourseWithProgress | null;
+    activities: ActivityItem[];
+    upcoming: UpcomingItem[];
+  }>({
+    queryKey: ['dashboard', user?.id],
+    queryFn: () => fetchDashboardData(user!.id),
+    enabled: !!user,
+  });
 
-      const { data: enrollments } = await supabase
-        .from('enrollments')
-        .select('status')
-        .eq('user_id', user.id);
+  const stats = dashboardData?.stats ?? { coursesEnrolled: 0, coursesCompleted: 0, certificatesEarned: 0, pendingAssessments: 0 };
+  const continueCourse = dashboardData?.continueCourse ?? null;
+  const activities = dashboardData?.activities ?? [];
+  const upcoming = dashboardData?.upcoming ?? [];
 
-      const { data: certs } = await supabase
-        .from('certificates')
-        .select('id')
-        .eq('user_id', user.id);
-
-      const { data: attempts } = await supabase
-        .from('assessment_attempts')
-        .select('status')
-        .eq('user_id', user.id)
-        .in('status', ['in_progress', 'started']);
-
-      const enrolled = enrollments?.length || 0;
-      const completed = enrollments?.filter(e => e.status === 'completed').length || 0;
-
-      setStats({
-        coursesEnrolled: enrolled,
-        coursesCompleted: completed,
-        certificatesEarned: certs?.length || 0,
-        pendingAssessments: (attempts?.length || 0),
-      });
-
-      const { data: inProgress } = await supabase
-        .from('enrollments')
-        .select('course_id, progress_percent, status, courses(id, title, description, department, thumbnail_url, duration)')
-        .eq('user_id', user.id)
-        .eq('status', 'in_progress')
-        .order('enrolled_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (inProgress && inProgress.courses) {
-        const c = inProgress.courses as any;
-        setContinueCourse({
-          id: c.id,
-          title: c.title,
-          description: c.description,
-          department: c.department,
-          thumbnail_url: c.thumbnail_url,
-          duration: c.duration,
-          progress_percent: inProgress.progress_percent,
-          status: inProgress.status,
-        });
-      }
-
-      const { data: acts } = await supabase
-        .from('activities')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(6);
-      setActivities(acts || []);
-
-      // Only show upcoming if user has enrolled courses
-      if (enrolled > 0) {
-        const { data: assessments } = await supabase
-          .from('assessments')
-          .select('id, title, course_id, courses(title)')
-          .limit(3);
-        // Set due date to 7 days from now
-        const dueDate = new Date(Date.now() + 7 * 86400000);
-        const upcomingItems: UpcomingItem[] = (assessments || []).map((a: any) => ({
-          id: a.id,
-          title: a.title,
-          course_name: a.courses?.title || null,
-          due_date: dueDate.toISOString(),
-          type: 'assessment',
-        }));
-        setUpcoming(upcomingItems);
-      } else {
-        setUpcoming([]);
-      }
-      setLoading(false);
-    };
-    fetchDashboard();
-  }, [user]);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const statCards = [
     { label: 'Courses Enrolled', value: stats.coursesEnrolled, icon: BookOpen, color: 'bg-blue-50 text-blue-600' },
@@ -153,7 +86,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
