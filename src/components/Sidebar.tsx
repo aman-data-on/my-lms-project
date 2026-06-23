@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Menu,
   Shield,
+  X,
 } from 'lucide-react';
 
 // Sidebar is router-aware now; no external props required.
@@ -47,12 +48,13 @@ export default function Sidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden w-10 h-10 bg-white rounded-lg shadow-md border border-slate-100 flex items-center justify-center"
+        aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={mobileOpen}
+        className="fixed top-4 left-4 z-50 md:hidden w-10 h-10 bg-white rounded-lg shadow-md border border-slate-100 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
-        <Menu className="w-5 h-5 text-slate-700" />
+        {mobileOpen ? <X className="w-5 h-5 text-slate-700" /> : <Menu className="w-5 h-5 text-slate-700" />}
       </button>
-      <aside className={`w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
-        <div className="p-6 border-b border-slate-100">
+      <aside className={`w-[min(90vw,18rem)] md:w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 overflow-y-auto`}>        <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-primary-800 rounded-lg flex items-center justify-center">
               <GraduationCap className="w-6 h-6 text-white" />

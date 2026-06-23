@@ -62,8 +62,25 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+      <div className="space-y-8 animate-pulse">
+        <div className="rounded-3xl bg-slate-200 h-44" />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-32 rounded-2xl bg-slate-200" />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="h-60 rounded-2xl bg-slate-200" />
+            <div className="h-44 rounded-2xl bg-slate-200" />
+          </div>
+          <div className="space-y-4">
+            <div className="h-56 rounded-2xl bg-slate-200" />
+            <div className="h-48 rounded-2xl bg-slate-200" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -85,14 +102,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
       default: return Zap;
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">
@@ -202,7 +211,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
           {/* Quick Actions */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-lg font-semibold text-slate-800 mb-4">Quick Actions</h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               <button
                 onClick={() => onNavigate('course-library')}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-50 hover:bg-primary-50 border border-slate-100 hover:border-primary-200 transition-all"
