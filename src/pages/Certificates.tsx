@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { Award, Download, Eye, X, GraduationCap, Calendar, TrendingUp, CheckCircle2, Star } from 'lucide-react';
 import { formatDate } from '../lib/utils';
 
@@ -45,6 +43,10 @@ export default function Certificates() {
 
   const downloadPDF = async () => {
     if (!certRef.current || !selectedCert) return;
+    const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]);
     const canvas = await html2canvas(certRef.current, { scale: 2, backgroundColor: '#ffffff' });
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('landscape', 'mm', 'a4');
