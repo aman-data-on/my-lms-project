@@ -27,6 +27,16 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   return children;
 }
 
+// Guards a route so only users whose profile.role === 'admin' can access it.
+// A non-admin who navigates directly to /admin or /course-builder is redirected
+// to the dashboard. RequireAuth must wrap this (auth check happens first).
+function RequireAdmin({ children }: { children: JSX.Element }) {
+  const { isAdmin, loading } = useAuth();
+  if (loading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
+  return children;
+}
+
 function RouteWrappers() {
   const navigate = useNavigate();
 
@@ -57,8 +67,8 @@ function RouteWrappers() {
       <Route path="/certificates" element={<RequireAuth><Certificates /></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-      <Route path="/admin" element={<RequireAuth><AdminPanel onNavigate={mapNavigate} /></RequireAuth>} />
-      <Route path="/course-builder" element={<RequireAuth><CourseBuilder onNavigate={mapNavigate} /></RequireAuth>} />
+      <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminPanel onNavigate={mapNavigate} /></RequireAdmin></RequireAuth>} />
+      <Route path="/course-builder" element={<RequireAuth><RequireAdmin><CourseBuilder onNavigate={mapNavigate} /></RequireAdmin></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
