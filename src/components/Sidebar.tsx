@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard,
@@ -15,10 +16,7 @@ import {
   Shield,
 } from 'lucide-react';
 
-interface SidebarProps {
-  activePage: string;
-  onNavigate: (page: string) => void;
-}
+// Sidebar is router-aware now; no external props required.
 
 const baseNavItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -37,6 +35,8 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
   const navItems = isAdmin
     ? [...baseNavItems, { id: 'admin', label: 'Admin Panel', icon: Shield }]
     : baseNavItems;
+
+  const navigate = useNavigate();
 
   return (
     <>
@@ -67,21 +67,20 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activePage === item.id;
+            const to = item.id === 'dashboard' ? '/' : `/${item.id}`;
             return (
-              <button
+              <NavLink
                 key={item.id}
-                onClick={() => { onNavigate(item.id); setMobileOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                  isActive
-                    ? 'bg-primary-50 text-primary-800'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-primary-700'
+                to={to}
+                onClick={() => setMobileOpen(false)}
+                className={({ isActive }) => `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                  isActive ? 'bg-primary-50 text-primary-800' : 'text-slate-600 hover:bg-slate-50 hover:text-primary-700'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-primary-500'}`} />
+                <Icon className="w-5 h-5 text-slate-400 group-hover:text-primary-500" />
                 <span className="flex-1 text-left">{item.label}</span>
-                {isActive && <ChevronRight className="w-4 h-4 text-primary-500" />}
-              </button>
+                <ChevronRight className="w-4 h-4 text-primary-500 opacity-0 group-data-[active=true]:opacity-100" />
+              </NavLink>
             );
           })}
         </nav>
@@ -97,7 +96,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
             </div>
           </div>
           <button
-            onClick={() => signOut()}
+            onClick={() => { signOut(); navigate('/auth'); }}
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
           >
             <LogOut className="w-5 h-5" />
