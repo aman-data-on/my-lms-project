@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { BlockBase, BlockType } from '../lib/blocks';
 import { BLOCK_DEFINITIONS } from '../lib/blocks';
+import { safeHtml } from '../lib/sanitize';
 
 // ─── Block Editor Wrapper ────────────────────────────────────────────
 export function BlockEditor({
@@ -332,7 +333,7 @@ function TextBlockEditor({ html, onChange }: { html: string; onChange: (html: st
           <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-700">Preview</summary>
           <div
             className="mt-2 p-3 border border-slate-200 rounded-lg prose prose-slate max-w-none [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_p]:text-sm [&_p]:text-slate-600 [&_p]:mb-2"
-            dangerouslySetInnerHTML={{ __html: html }}
+            dangerouslySetInnerHTML={{ __html: safeHtml(html) }}
           />
         </details>
       )}

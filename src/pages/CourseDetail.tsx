@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { safeHtml } from '../lib/sanitize';
 import {
   fetchCourse,
   fetchLessons,
@@ -145,7 +146,7 @@ function LessonContent({
           ) : lesson.video_url ? (
             <div
               className="prose prose-slate max-w-none [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-slate-800 [&_h3]:mt-6 [&_h3]:mb-3 [&_p]:text-slate-600 [&_p]:text-base [&_p]:leading-relaxed [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 [&_ol]:mb-4 [&_li]:text-slate-600 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:mb-4 [&_th]:bg-primary-800 [&_th]:text-white [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_td]:px-3 [&_td]:py-2 [&_td]:border-b [&_td]:border-slate-100 [&_tr:nth-child(even)]:bg-slate-50 [&_div]:rounded-lg [&_strong]:text-slate-800"
-              dangerouslySetInnerHTML={{ __html: lesson.video_url }}
+              dangerouslySetInnerHTML={{ __html: safeHtml(lesson.video_url) }}
             />
           ) : (
             <div className="prose prose-slate max-w-none">

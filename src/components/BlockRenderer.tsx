@@ -5,6 +5,7 @@ import {
   Quote as QuoteIcon, Download, Check, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import type { BlockBase } from '../lib/blocks';
+import { safeHtml } from '../lib/sanitize';
 
 // ─── Student Block Renderer ──────────────────────────────────────────
 export function BlockRenderer({ block, lessonId, userId }: { block: BlockBase; lessonId: string; userId: string }) {
@@ -33,7 +34,7 @@ function TextBlockView({ data }: { data: any }) {
   return (
     <div
       className="prose prose-slate max-w-none [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:text-slate-800 [&_h1]:mt-6 [&_h1]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-slate-800 [&_h2]:mt-5 [&_h2]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-slate-700 [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-base [&_h4]:font-semibold [&_h4]:text-slate-700 [&_h4]:mt-3 [&_h4]:mb-2 [&_p]:text-slate-600 [&_p]:text-base [&_p]:leading-relaxed [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 [&_ol]:mb-4 [&_li]:text-slate-600 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:mb-4 [&_th]:bg-primary-800 [&_th]:text-white [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_td]:px-3 [&_td]:py-2 [&_td]:border-b [&_td]:border-slate-100 [&_tr:nth-child(even)]:bg-slate-50 [&_strong]:text-slate-800 [&_blockquote]:border-l-4 [&_blockquote]:border-primary-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_blockquote]:my-4 [&_pre]:bg-slate-800 [&_pre]:text-slate-100 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-4 [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono [&_hr]:border-slate-200 [&_hr]:my-6 [&_mark]:bg-yellow-200 [&_mark]:px-1 [&_mark]:rounded"
-      dangerouslySetInnerHTML={{ __html: data.html }}
+      dangerouslySetInnerHTML={{ __html: safeHtml(data.html) }}
     />
   );
 }
@@ -110,7 +111,7 @@ function TwoColumnBlockView({ data }: { data: any }) {
         </div>
         <div
           className="text-sm text-slate-600 leading-relaxed prose prose-slate max-w-none [&_p]:mb-3 [&_strong]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
-          dangerouslySetInnerHTML={{ __html: data.rightText }}
+          dangerouslySetInnerHTML={{ __html: safeHtml(data.rightText) }}
         />
       </div>
     );
@@ -119,11 +120,11 @@ function TwoColumnBlockView({ data }: { data: any }) {
     <div className="grid grid-cols-2 gap-4 my-4">
       <div
         className="text-sm text-slate-600 leading-relaxed prose prose-slate max-w-none [&_p]:mb-3 [&_strong]:text-slate-800"
-        dangerouslySetInnerHTML={{ __html: data.leftText }}
+        dangerouslySetInnerHTML={{ __html: safeHtml(data.leftText) }}
       />
       <div
         className="text-sm text-slate-600 leading-relaxed prose prose-slate max-w-none [&_p]:mb-3 [&_strong]:text-slate-800"
-        dangerouslySetInnerHTML={{ __html: data.rightText }}
+        dangerouslySetInnerHTML={{ __html: safeHtml(data.rightText) }}
       />
     </div>
   );

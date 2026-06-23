@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { safeHtml } from '../lib/sanitize';
 import { pushLessonCompletion, markLessonCompleteInProgress } from '../lib/reportData';
 import { CourseAppendix } from '../components/CourseAppendix';
 import { CourseIndex } from '../components/CourseIndex';
@@ -2480,7 +2481,7 @@ function SlideLeftContent({ slide }: { slide: Slide }) {
       {slide.leftContent.content && (
         <div
           className="text-slate-600 text-sm leading-relaxed [&_p]:mb-3 [&_strong]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
-          dangerouslySetInnerHTML={{ __html: slide.leftContent.content }}
+          dangerouslySetInnerHTML={{ __html: safeHtml(slide.leftContent.content) }}
         />
       )}
 
