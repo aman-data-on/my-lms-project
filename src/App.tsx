@@ -98,8 +98,19 @@ function CourseRouteWrapper({ onNavigate }: { onNavigate: (page: string, data?: 
 function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      {/* Skip link — visually hidden until keyboard focused, then fixed at top-centre */}
+      <a
+        href="#main-content"
+        className="absolute -top-full left-1/2 -translate-x-1/2 z-[200] focus-visible:top-4 px-4 py-2 bg-primary-800 text-white rounded-lg text-sm font-medium shadow-lg whitespace-nowrap transition-[top] motion-reduce:transition-none focus:outline-none"
+      >
+        Skip to main content
+      </a>
       <Sidebar />
-      <main className="flex-1 ml-0 md:ml-64 p-4 md:p-8 overflow-y-auto min-h-screen">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 ml-0 md:ml-64 px-4 md:px-8 pb-4 md:pb-8 pt-14 md:pt-8 overflow-y-auto min-h-screen focus:outline-none"
+      >
         <div className="max-w-6xl mx-auto">
           <RouteWrappers />
         </div>
