@@ -36,6 +36,8 @@ interface CourseIndexProps {
   isPhaseUnlocked: (phaseNum: number) => boolean;
   isAdmin: boolean;
   onModuleClick: (lessonIndex: number) => void;
+  /** Phase numbers to expand on first render. Defaults to all phases. */
+  defaultExpandedPhases?: number[];
 }
 
 // Strip redundant "Phase N — " prefix if the name already contains it
@@ -52,11 +54,14 @@ export function CourseIndex({
   isPhaseUnlocked,
   isAdmin,
   onModuleClick,
+  defaultExpandedPhases,
 }: CourseIndexProps) {
   const storageKey = `course-index-${courseId}-${userId}`;
   const [allCollapsed, setAllCollapsed] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(
-    () => new Set(phases.map(p => p.number)),
+    () => defaultExpandedPhases
+      ? new Set(defaultExpandedPhases)
+      : new Set(phases.map(p => p.number)),
   );
 
   useEffect(() => {

@@ -10,7 +10,7 @@ import {
   BookOpen, Check, ArrowRight, Trophy, XCircle, Timer,
   ClipboardCheck, Sparkles, Download, FileText, HelpCircle,
   PlayCircle, X, ChevronRight, Circle, Star, Clock,
-  ChevronDown, Menu
+  ChevronDown, Menu, GraduationCap
 } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -1573,72 +1573,104 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
 
   // ─── OVERVIEW VIEW ────────────────────────────────────────────────
   if (view === 'overview') {
+    const currentPhaseNum = getCurrentPhase();
+    const allComplete = phaseProgress.every(p => p.status === 'completed');
+    const nextLesson = lessons[currentLessonIndex];
+    const completedModulesCount = lessons.filter(l => completedLessons.has(l.id)).length;
+
     return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <button onClick={() => onNavigate('course-library')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-            <ChevronLeft className="w-5 h-5 text-slate-600" />
+      <div className="space-y-5">
+        {/* Breadcrumb */}
+        <nav aria-label="Breadcrumb">
+          <button
+            onClick={() => onNavigate('course-library')}
+            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-primary-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to Courses
           </button>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-slate-800 truncate">{course?.title}</h2>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="px-2 py-0.5 bg-cyan-50 text-cyan-700 text-xs font-medium rounded-full">{course?.department}</span>
-              <span className="text-xs text-slate-400">{course?.duration}</span>
+        </nav>
+
+        {/* Course hero card */}
+        <div className="bg-primary-900 rounded-xl p-6 md:p-8 text-white">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <GraduationCap className="w-6 h-6 text-white" aria-hidden="true" />
+            </div>
+            <h1 className="text-xl md:text-2xl font-bold text-white leading-tight flex-1">
+              {course?.title}
+            </h1>
+          </div>
+
+          {course?.description && (
+            <p className="text-primary-200 text-sm leading-relaxed mb-5">
+              {course.description}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-primary-300 mb-5">
+            <span className="flex items-center gap-1.5">
+              <BookOpen className="w-4 h-4" aria-hidden="true" />
+              {lessons.length} modules
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4" aria-hidden="true" />
+              {course?.duration}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Award className="w-4 h-4" aria-hidden="true" />
+              {getOverallProgress()}% complete
+            </span>
+          </div>
+
+          <div className="border-t border-white/10 pt-4">
+            <div className="flex items-center justify-between text-sm mb-2">
+              <span className="text-primary-300">Course Progress</span>
+              <span className="text-white font-medium">{completedModulesCount} / {lessons.length} modules</span>
+            </div>
+            <div className="w-full bg-white/20 rounded-full h-1.5">
+              <div
+                aria-hidden="true"
+                className="bg-cyan-400 rounded-full h-1.5 transition-all duration-500 motion-reduce:transition-none"
+                style={{ width: `${getOverallProgress()}%` }}
+              />
             </div>
           </div>
         </div>
 
-        {/* Overall Progress */}
-        <div className="bg-white rounded-lg p-4 border border-slate-100">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-slate-600">Course Progress</span>
-            <span className="font-semibold text-cyan-700">
-              {phaseProgress.filter(p => p.status === 'completed').length} of 5 Phases Completed — {getOverallProgress()}%
-            </span>
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-2.5">
-            <div className="bg-cyan-500 rounded-full h-2.5 transition-all duration-500" style={{ width: `${getOverallProgress()}%` }} />
-          </div>
-        </div>
-
-        {/* Continue Learning Button */}
-        {(() => {
-          const currentPhase = getCurrentPhase();
-          const allComplete = phaseProgress.every(p => p.status === 'completed');
-          const nextLesson = lessons[currentLessonIndex];
-          if (allComplete) {
-            return (
-              <button
-                onClick={() => setView('certificate')}
-                className="w-full flex items-center justify-between px-6 py-3.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-150"
-              >
-                <div className="flex items-center gap-3">
-                  <Award className="w-5 h-5" />
-                  <span className="font-semibold">View Certificate</span>
-                  <span className="text-green-100 text-sm font-normal">Course completed</span>
-                </div>
-                <ArrowRight className="w-5 h-5" />
-              </button>
-            );
-          }
-          return (
-            <button
-              onClick={() => {
-                setActivePhase(currentPhase);
-                navigateToLesson(currentLessonIndex);
-              }}
-              className="w-full flex items-center justify-between px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-150"
-            >
-              <div className="flex items-center gap-3">
-                <PlayCircle className="w-5 h-5" />
-                <span className="font-semibold">Continue Learning</span>
-                <span className="text-blue-100 text-sm font-normal">{nextLesson?.title || 'Next lesson'}</span>
-              </div>
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          );
-        })()}
+        {/* CTA */}
+        {allComplete ? (
+          <button
+            onClick={() => setView('certificate')}
+            className="w-full flex items-center justify-between px-6 py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Award className="w-5 h-5" aria-hidden="true" />
+              <span className="font-semibold">View Certificate</span>
+              <span className="text-green-100 text-sm font-normal">Course completed</span>
+            </div>
+            <ArrowRight className="w-5 h-5" aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              setActivePhase(currentPhaseNum);
+              navigateToLesson(currentLessonIndex);
+            }}
+            className="w-full flex items-center justify-between px-6 py-4 bg-primary-800 text-white rounded-xl hover:bg-primary-900 transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <PlayCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+              <span className="font-semibold flex-shrink-0">
+                {completedModulesCount > 0 ? 'Continue Learning' : 'Start Course'}
+              </span>
+              <span className="text-primary-200 text-sm font-normal truncate">
+                {nextLesson?.title || 'Next lesson'}
+              </span>
+            </div>
+            <ArrowRight className="w-5 h-5 flex-shrink-0 ml-2" aria-hidden="true" />
+          </button>
+        )}
 
         {/* Course Index */}
         {(() => {
@@ -1670,7 +1702,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
             return 'not_started';
           };
 
-          const getModuleStatusForIndex = (mod: { lessonIndex: number; id: string }): 'completed' | 'current' | 'available' | 'locked' => {
+          const getModuleStatusForIndex = (mod: { lessonIndex: number; id: string }, _li: number): 'completed' | 'current' | 'available' | 'locked' => {
             const lessonId = lessons[mod.lessonIndex]?.id;
             if (!lessonId) return 'locked';
             if (completedLessons.has(lessonId)) return 'completed';
@@ -1688,6 +1720,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
               getModuleStatus={getModuleStatusForIndex}
               isPhaseUnlocked={isPhaseUnlocked}
               isAdmin={!!isAdmin}
+              defaultExpandedPhases={[currentPhaseNum]}
               onModuleClick={(lessonIdx) => {
                 setCurrentLessonIndex(lessonIdx);
                 const phase = PHASES.find(p => p.modules.includes(lessonIdx));
@@ -1962,25 +1995,40 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top Bar */}
-          <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 lg:px-6 flex-shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              {/* Mobile Menu Toggle */}
+          <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 lg:px-6 flex-shrink-0 gap-2">
+            {/* Left — back + course title, fixed third */}
+            <div className="flex items-center gap-1 w-[30%] min-w-0">
               <button
                 onClick={() => setMobileSidebarOpen(true)}
-                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors lg:hidden"
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors lg:hidden flex-shrink-0"
+                aria-label="Open course navigation"
               >
                 <Menu className="w-5 h-5 text-slate-600" />
               </button>
-              <button onClick={() => setView('overview')} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+              <button
+                onClick={() => setView('overview')}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+                aria-label="Back to course overview"
+              >
                 <ChevronLeft className="w-5 h-5 text-slate-600" />
               </button>
-              <span className="text-sm text-slate-500 truncate hidden sm:inline">{course?.title}</span>
+              <span className="text-xs text-slate-400 truncate hidden md:inline leading-tight">
+                {course?.title}
+              </span>
             </div>
-            <div className="flex-1 flex justify-center min-w-0 px-4">
-              <h1 className="font-bold text-slate-800 truncate text-sm sm:text-base">{currentLesson?.title}</h1>
+
+            {/* Center — lesson title, always centred */}
+            <div className="flex-1 flex justify-center min-w-0 px-2">
+              <h1 className="font-bold text-slate-800 truncate text-sm sm:text-base text-center">
+                {currentLesson?.title}
+              </h1>
             </div>
-            <div className="flex items-center gap-2 text-sm text-slate-500 min-w-0">
-              <span>{currentSlideIndex + 1} / {currentSlides.length}</span>
+
+            {/* Right — slide counter, fixed third */}
+            <div className="flex items-center justify-end gap-2 text-sm text-slate-500 w-[30%]">
+              <span className="whitespace-nowrap tabular-nums">
+                {currentSlideIndex + 1} / {currentSlides.length}
+              </span>
             </div>
           </header>
 
