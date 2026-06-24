@@ -12,11 +12,14 @@ import {
 } from '../lib/api';
 import { pushLessonCompletion, markLessonCompleteInProgress } from '../lib/reportData';
 import {
-  ChevronLeft, Play, FileText, HelpCircle, CheckCircle2, Lock,
-  Clock, Award, BookOpen, Check
+  ChevronLeft, ChevronRight, Play,
+  CheckCircle2, Lock, Clock, Award, BookOpen, Check, X, AlignLeft,
 } from 'lucide-react';
 import { BlockRenderer } from '../components/BlockRenderer';
 import { CourseIndex, type IndexPhase, type IndexModule } from '../components/CourseIndex';
+import { Button } from '../components/ui/Button';
+import { ProgressBar } from '../components/ui/ProgressBar';
+import { cn } from '../lib/cn';
 import type { BlockBase } from '../lib/blocks';
 
 interface Lesson {
@@ -38,25 +41,16 @@ interface Course {
   duration: string;
 }
 
-// ─── Lesson Content Renderer with TOC + Read Time ───────────────────
+// ─── Lesson content — blocks only, no TOC or action bar ──────────────────────
 function LessonContent({
   lesson,
   course,
-  completedLessons,
-  currentLessonIndex,
-  totalLessons,
   userId,
-  onMarkComplete,
 }: {
-  lesson: any;
-  course: any;
-  completedLessons: Set<string>;
-  currentLessonIndex: number;
-  totalLessons: number;
+  lesson: Lesson;
+  course: Course;
   userId: string;
-  onMarkComplete: () => void;
 }) {
-  // Parse blocks from lesson.video_url
   const blocks: BlockBase[] = useMemo(() => {
     if (!lesson.video_url) return [];
     const trimmed = lesson.video_url.trim();
@@ -69,7 +63,6 @@ function LessonContent({
     return [{ id: 'legacy-text', type: 'text' as const, data: { html: trimmed } }];
   }, [lesson.video_url]);
 
-  // Calculate read time (200 words/min, min 1 min)
   const readTime = useMemo(() => {
     const allText = blocks.map(b => {
       if (b.type === 'text' && b.data.html) return b.data.html.replace(/<[^>]+>/g, ' ');
@@ -79,176 +72,133 @@ function LessonContent({
     return Math.max(1, Math.ceil(words / 200));
   }, [blocks]);
 
-  // Extract headings for TOC
-  const headings = useMemo(() => {
-    const result: { id: string; level: number; text: string }[] = [];
-    blocks.forEach(b => {
-      if (b.type === 'text' && b.data.html) {
-        const matches = b.data.html.match(/<h([1-4])[^>]*>(.*?)<\/h\1>/gi);
-        if (matches) {
-          matches.forEach((m: string) => {
-            const levelMatch = m.match(/<h([1-4])/i);
-            const textMatch = m.match(/>([^<]*)</);
-            if (levelMatch && textMatch && textMatch[1].trim()) {
-              const text = textMatch[1].trim();
-              result.push({
-                id: `heading-${result.length}`,
-                level: parseInt(levelMatch[1]),
-                text,
-              });
-            }
-          });
-        }
-      }
-    });
-    return result;
-  }, [blocks]);
-
-  const scrollToHeading = (idx: number) => {
-    const el = document.getElementById(`heading-${idx}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   return (
-    <div className="flex gap-6">
-      {/* Main content */}
-      <div className="flex-1 space-y-4">
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <span className="px-3 py-1 bg-blue-50 text-blue-700 text-sm font-medium rounded-full flex items-center gap-2">
-              <BookOpen className="w-4 h-4" />
-              {lesson.type === 'video' ? 'Video' : lesson.type === 'quiz' ? 'Quiz' : 'Reading'}
-            </span>
-            <span className="text-sm text-slate-400 flex items-center gap-1">
-              <Clock className="w-4 h-4" /> {lesson.duration || '5 min'}
-            </span>
-            <span className="text-sm text-slate-400 flex items-center gap-1">
-              ~ {readTime} min read
-            </span>
-          </div>
-
-          <h3 className="text-2xl font-bold text-slate-800 mb-6">{lesson.title}</h3>
-
-          {blocks.length > 0 ? (
-            <div>
-              {blocks.map((block) => {
-                // Add heading IDs for TOC scroll
-                if (block.type === 'text' && block.data.html) {
-                  let headingIdx = 0;
-                  const html = block.data.html.replace(/<h([1-4])/gi, (_match: string, level: string) => {
-                    return `<h${level} id="heading-${headingIdx++}"`;
-                  });
-                  return <BlockRenderer key={block.id} block={{ ...block, data: { ...block.data, html } }} lessonId={lesson.id} userId={userId} />;
-                }
-                return <BlockRenderer key={block.id} block={block} lessonId={lesson.id} userId={userId} />;
-              })}
-            </div>
-          ) : lesson.video_url ? (
-            <div
-              className="prose prose-slate max-w-none [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-slate-800 [&_h3]:mt-6 [&_h3]:mb-3 [&_p]:text-slate-600 [&_p]:text-base [&_p]:leading-relaxed [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 [&_ol]:mb-4 [&_li]:text-slate-600 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:mb-4 [&_th]:bg-primary-800 [&_th]:text-white [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_td]:px-3 [&_td]:py-2 [&_td]:border-b [&_td]:border-slate-100 [&_tr:nth-child(even)]:bg-slate-50 [&_div]:rounded-lg [&_strong]:text-slate-800"
-              dangerouslySetInnerHTML={{ __html: safeHtml(lesson.video_url) }}
-            />
-          ) : (
-            <div className="prose prose-slate max-w-none">
-              <p className="text-slate-600 text-base leading-relaxed mb-4">
-                {course?.description}
-              </p>
-              <p className="text-slate-600 text-base leading-relaxed mb-4">
-                This lesson covers the fundamental concepts and best practices related to {lesson.title.toLowerCase()}.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Action Button */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">
-                {completedLessons.size === totalLessons - 1 && !completedLessons.has(lesson.id)
-                  ? 'Final Lesson — Complete to finish the course'
-                  : completedLessons.has(lesson.id)
-                    ? currentLessonIndex < totalLessons - 1 ? 'Completed — Continue to next lesson' : 'Course Completed'
-                    : `Lesson ${currentLessonIndex + 1} of ${totalLessons}`}
-              </p>
-            </div>
-            <button
-              onClick={onMarkComplete}
-              className="flex items-center gap-2 px-6 py-3 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors"
-            >
-              <Check className="w-4 h-4" />
-              {completedLessons.size === totalLessons - 1 && !completedLessons.has(lesson.id)
-                ? 'Complete Course'
-                : completedLessons.has(lesson.id)
-                  ? currentLessonIndex < totalLessons - 1 ? 'Continue to Next Lesson' : 'Course Completed'
-                  : 'Mark as Complete & Continue'}
-            </button>
-          </div>
-        </div>
+    <article>
+      {/* Lesson meta */}
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">
+          <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+          {lesson.type === 'video' ? 'Video' : lesson.type === 'quiz' ? 'Quiz' : 'Reading'}
+        </span>
+        {lesson.duration && (
+          <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+            <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+            {lesson.duration}
+          </span>
+        )}
+        <span className="text-xs text-slate-400">~ {readTime} min read</span>
       </div>
 
-      {/* Sticky TOC - desktop only */}
-      {headings.length > 0 && (
-        <div className="hidden xl:block w-56 flex-shrink-0">
-          <div className="sticky top-4 bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">On this page</h4>
-            <ul className="space-y-1.5">
-              {headings.map((h, i) => (
-                <li key={i} style={{ marginLeft: (h.level - 1) * 12 }}>
-                  <button
-                    onClick={() => scrollToHeading(i)}
-                    className="text-left text-sm text-slate-600 hover:text-primary-700 transition-colors leading-snug"
-                  >
-                    {h.text}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+      <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-8 leading-snug">
+        {lesson.title}
+      </h1>
+
+      {blocks.length > 0 ? (
+        <div className="space-y-1">
+          {blocks.map((block) => {
+            if (block.type === 'text' && block.data.html) {
+              let idx = 0;
+              const html = block.data.html.replace(/<h([1-4])/gi, (_m: string, level: string) => {
+                return `<h${level} id="heading-${idx++}"`;
+              });
+              return (
+                <BlockRenderer
+                  key={block.id}
+                  block={{ ...block, data: { ...block.data, html } }}
+                  lessonId={lesson.id}
+                  userId={userId}
+                />
+              );
+            }
+            return (
+              <BlockRenderer key={block.id} block={block} lessonId={lesson.id} userId={userId} />
+            );
+          })}
+        </div>
+      ) : lesson.video_url ? (
+        <div
+          className="prose prose-slate max-w-none [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-slate-800 [&_h3]:mt-6 [&_h3]:mb-3 [&_p]:text-slate-600 [&_p]:text-base [&_p]:leading-relaxed [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 [&_ol]:mb-4 [&_li]:text-slate-600 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:mb-4 [&_th]:bg-primary-800 [&_th]:text-white [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_td]:px-3 [&_td]:py-2 [&_td]:border-b [&_td]:border-slate-100 [&_tr:nth-child(even)]:bg-slate-50 [&_strong]:text-slate-800"
+          dangerouslySetInnerHTML={{ __html: safeHtml(lesson.video_url) }}
+        />
+      ) : (
+        <div className="prose prose-slate max-w-none">
+          <p className="text-slate-600 text-base leading-relaxed mb-4">{course.description}</p>
+          <p className="text-slate-600 text-base leading-relaxed mb-4">
+            This lesson covers the fundamental concepts and best practices related to{' '}
+            {lesson.title.toLowerCase()}.
+          </p>
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
-export default function CourseDetail({ courseId, onNavigate }: { courseId: string; onNavigate: (page: string, data?: any) => void }) {
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function CourseDetail({
+  courseId,
+  onNavigate,
+}: {
+  courseId: string;
+  onNavigate: (page: string, data?: any) => void;
+}) {
   const { user, isAdmin } = useAuth();
-  const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
-  const [showCongrats, setShowCongrats] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const queryClient = useQueryClient();
 
-  const { data: course, isLoading: courseLoading } = useQuery<Course>({ queryKey: ['course', courseId], queryFn: () => fetchCourse(courseId), enabled: !!user && !!courseId });
-  const { data: lessons = [], isLoading: lessonsLoading } = useQuery<Lesson[]>({ queryKey: ['lessons', courseId], queryFn: () => fetchLessons(courseId), enabled: !!user && !!courseId });
-  const { data: progressData = [], isLoading: progressLoading } = useQuery<any[]>({ queryKey: ['progress', user?.id], queryFn: () => fetchLessonProgress(user!.id), enabled: !!user });
+  const [view, setView] = useState<'overview' | 'reader'>('overview');
+  const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
+  const [curriculumOpen, setCurriculumOpen] = useState(false);
+  const [showCongrats, setShowCongrats] = useState(false);
+
+  const { data: course, isLoading: courseLoading } = useQuery<Course>({
+    queryKey: ['course', courseId],
+    queryFn: () => fetchCourse(courseId),
+    enabled: !!user && !!courseId,
+  });
+  const { data: lessons = [], isLoading: lessonsLoading } = useQuery<Lesson[]>({
+    queryKey: ['lessons', courseId],
+    queryFn: () => fetchLessons(courseId),
+    enabled: !!user && !!courseId,
+  });
+  const { data: progressData = [], isLoading: progressLoading } = useQuery<any[]>({
+    queryKey: ['progress', user?.id],
+    queryFn: () => fetchLessonProgress(user!.id),
+    enabled: !!user,
+  });
 
   const loading = courseLoading || lessonsLoading || progressLoading;
-  const completedLessons = useMemo(() => new Set<string>((progressData || []).map((p: any) => p.lesson_id)), [progressData]);
+  const completedLessons = useMemo(
+    () => new Set<string>((progressData || []).map((p: any) => p.lesson_id)),
+    [progressData],
+  );
 
   useEffect(() => {
-    if (!user) return;
-    // Find the first incomplete lesson or default to first lesson when data loads
+    if (!user || !lessons.length) return;
     const completedSet = new Set<string>((progressData || []).map((p: any) => p.lesson_id));
-    const firstIncomplete = (lessons || []).findIndex((l: Lesson) => !completedSet.has(l.id));
+    const firstIncomplete = lessons.findIndex(l => !completedSet.has(l.id));
     setCurrentLessonIndex(firstIncomplete >= 0 ? firstIncomplete : 0);
   }, [lessons, progressData, user]);
 
-  const progressPercent = lessons.length > 0 ? Math.round((completedLessons.size / lessons.length) * 100) : 0;
+  const progressPercent =
+    lessons.length > 0 ? Math.round((completedLessons.size / lessons.length) * 100) : 0;
 
   const isLessonAccessible = (index: number) => {
     if (isAdmin) return true;
     if (index === 0) return true;
-    // A lesson is accessible if the previous lesson is completed
     return completedLessons.has(lessons[index - 1].id);
   };
 
   const currentLesson = lessons[currentLessonIndex];
+  const isCurrentCompleted = !!(currentLesson && completedLessons.has(currentLesson.id));
+  const isLastLesson = currentLessonIndex === lessons.length - 1;
+  const isCourseDone = completedLessons.size === lessons.length && lessons.length > 0;
+
+  const actionLabel = isCurrentCompleted
+    ? isLastLesson ? 'Course Complete' : 'Next Lesson'
+    : isLastLesson ? 'Complete Course' : 'Mark Complete & Continue';
 
   const markCompleteAndContinue = async () => {
     if (!user || !currentLesson) return;
-
     try {
-      // Mark current lesson as complete
       if (!completedLessons.has(currentLesson.id)) {
         await upsertLessonProgress({
           user_id: user.id,
@@ -256,14 +206,13 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
           completed: true,
           completed_at: new Date().toISOString(),
         });
-        // Invalidate progress query so UI updates
         queryClient.invalidateQueries({ queryKey: ['progress', user.id] });
         pushLessonCompletion(user.id, currentLesson.id, courseId, currentLesson.duration || null);
         markLessonCompleteInProgress(user.id, courseId, currentLesson.id);
       }
 
-      // Recompute progress from latest cached data
-      const newCompletedCount = (completedLessons.size || 0) + (completedLessons.has(currentLesson.id) ? 0 : 1);
+      const newCompletedCount =
+        completedLessons.size + (completedLessons.has(currentLesson.id) ? 0 : 1);
       const newProgress = Math.round((newCompletedCount / lessons.length) * 100);
 
       if (newCompletedCount === lessons.length) {
@@ -299,15 +248,6 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
     }
   };
 
-  const getLessonIcon = (type: string) => {
-    switch (type) {
-      case 'video': return Play;
-      case 'quiz': return HelpCircle;
-      case 'document': return FileText;
-      default: return BookOpen;
-    }
-  };
-
   const getLessonStatus = (index: number, lesson: Lesson) => {
     if (completedLessons.has(lesson.id)) return 'completed';
     if (index === currentLessonIndex) return 'current';
@@ -315,6 +255,78 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
     return 'locked';
   };
 
+  // ─── CourseIndex data ─────────────────────────────────────────────────────
+  const PHASE_COLORS = ['#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444'];
+
+  const { sectionMap, sectionOrder } = useMemo(() => {
+    const map: Record<string, number[]> = {};
+    const order: string[] = [];
+    lessons.forEach((l, idx) => {
+      const sec = l.section || 'General';
+      if (!map[sec]) { map[sec] = []; order.push(sec); }
+      map[sec].push(idx);
+    });
+    return { sectionMap: map, sectionOrder: order };
+  }, [lessons]);
+
+  const indexPhases: IndexPhase[] = useMemo(() =>
+    sectionOrder.map((secName, pIdx) => ({
+      number: pIdx + 1,
+      name: secName,
+      color: PHASE_COLORS[pIdx % PHASE_COLORS.length],
+      bgColor: PHASE_COLORS[pIdx % PHASE_COLORS.length] + '10',
+      borderColor: PHASE_COLORS[pIdx % PHASE_COLORS.length],
+      description: '',
+      modules: (sectionMap[secName] || []).map(lIdx => ({
+        id: lessons[lIdx].id,
+        title: lessons[lIdx].title,
+        type: lessons[lIdx].type,
+        duration: lessons[lIdx].duration,
+        lessonIndex: lIdx,
+      } as IndexModule)),
+    })),
+  [sectionOrder, sectionMap, lessons]);
+
+  const getPhaseStatus = (phaseNum: number): 'completed' | 'in_progress' | 'locked' | 'not_started' => {
+    const phase = indexPhases.find(p => p.number === phaseNum);
+    if (!phase) return 'not_started';
+    const allDone = phase.modules.every(
+      m => lessons[m.lessonIndex] && completedLessons.has(lessons[m.lessonIndex].id),
+    );
+    if (allDone) return 'completed';
+    const anyDone = phase.modules.some(
+      m => lessons[m.lessonIndex] && completedLessons.has(lessons[m.lessonIndex].id),
+    );
+    const firstModIdx = phase.modules[0]?.lessonIndex ?? 0;
+    if (!isAdmin && !isLessonAccessible(firstModIdx)) return 'locked';
+    if (anyDone) return 'in_progress';
+    if (phase.modules.some(m => m.lessonIndex === currentLessonIndex)) return 'in_progress';
+    return 'not_started';
+  };
+
+  const getModuleStatus = (mod: IndexModule, _li: number): 'completed' | 'current' | 'available' | 'locked' => {
+    const lessonId = lessons[mod.lessonIndex]?.id;
+    if (!lessonId) return 'locked';
+    if (completedLessons.has(lessonId)) return 'completed';
+    if (currentLessonIndex === mod.lessonIndex) return 'current';
+    if (!isLessonAccessible(mod.lessonIndex)) return 'locked';
+    return 'available';
+  };
+
+  const isPhaseUnlocked = (phaseNum: number): boolean => {
+    const phase = indexPhases.find(p => p.number === phaseNum);
+    if (!phase) return false;
+    const firstModIdx = phase.modules[0]?.lessonIndex ?? 0;
+    return isAdmin || isLessonAccessible(firstModIdx);
+  };
+
+  const openLesson = (lessonIdx: number) => {
+    setCurrentLessonIndex(lessonIdx);
+    setView('reader');
+    setCurriculumOpen(false);
+  };
+
+  // ─── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -325,213 +337,346 @@ export default function CourseDetail({ courseId, onNavigate }: { courseId: strin
 
   if (!course) return null;
 
+  // ─── Curriculum drawer content (shared between reader and standalone) ─────
+  const SectionGroups: { name: string; startIndex: number }[] = [];
+  let lastSection: string | null = null;
+  lessons.forEach((l, idx) => {
+    const sec = l.section || 'General';
+    if (sec !== lastSection) {
+      SectionGroups.push({ name: sec, startIndex: idx });
+      lastSection = sec;
+    }
+  });
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => onNavigate('course-library')}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5 text-slate-600" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-bold text-slate-800 truncate">{course.title}</h2>
-          <div className="flex items-center gap-3 mt-1">
-            <span className="px-2 py-0.5 bg-primary-50 text-primary-700 text-xs font-medium rounded-full">{course.department}</span>
-            <span className="text-xs text-slate-400">{course.duration}</span>
-          </div>
-        </div>
-      </div>
+    <>
+      {/* ── Overview ─────────────────────────────────────────────────────── */}
+      {view === 'overview' && (
+        <div className="space-y-6">
+          {/* Breadcrumb */}
+          <nav aria-label="Breadcrumb">
+            <ol className="flex items-center gap-1.5 text-sm">
+              <li>
+                <button
+                  onClick={() => onNavigate('my-courses')}
+                  className="text-slate-500 hover:text-primary-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
+                >
+                  My Courses
+                </button>
+              </li>
+              <li aria-hidden="true" className="text-slate-300">/</li>
+              <li
+                className="text-slate-800 font-medium truncate max-w-[60ch]"
+                aria-current="page"
+              >
+                {course.title}
+              </li>
+            </ol>
+          </nav>
 
-      {/* Progress Bar */}
-      <div className="bg-white rounded-lg p-4 border border-slate-100">
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-slate-600">Course Progress</span>
-          <span className="font-semibold text-primary-700">{completedLessons.size} of {lessons.length} lessons completed</span>
-        </div>
-        <div className="w-full bg-slate-100 rounded-full h-2.5">
-          <div className="bg-primary-500 rounded-full h-2.5 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-        </div>
-      </div>
-
-      {/* Congrats Modal */}
-      {showCongrats && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Award className="w-10 h-10 text-green-600" />
+          {/* Course header card */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 md:p-8">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="px-2.5 py-0.5 bg-primary-50 text-primary-700 text-xs font-semibold rounded-full">
+                {course.department}
+              </span>
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+                {course.duration}
+              </span>
             </div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2">Congratulations!</h3>
-            <p className="text-slate-600 mb-6">You have completed the course "{course.title}".</p>
-            <button
-              onClick={() => onNavigate('assessments')}
-              className="px-6 py-3 bg-primary-800 text-white font-medium rounded-lg hover:bg-primary-900 transition-colors"
-            >
-              Take Assessment
-            </button>
+
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-3 leading-tight">
+              {course.title}
+            </h1>
+
+            {course.description && (
+              <p className="text-slate-600 text-base leading-relaxed mb-6 max-w-2xl">
+                {course.description}
+              </p>
+            )}
+
+            {/* Progress */}
+            <div className="mb-6 max-w-md">
+              <div className="flex items-center justify-between text-sm mb-2">
+                <span className="text-slate-600 font-medium">Your progress</span>
+                <span className="text-slate-500">
+                  {completedLessons.size} of {lessons.length} lessons
+                </span>
+              </div>
+              <ProgressBar value={progressPercent} size="md" showValue />
+            </div>
+
+            {/* CTAs */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="lg" onClick={() => setView('reader')} disabled={lessons.length === 0}>
+                {isCourseDone ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                    Review Course
+                  </>
+                ) : completedLessons.size > 0 ? (
+                  <>
+                    <Play className="w-4 h-4 fill-current" aria-hidden="true" />
+                    Continue Learning
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" aria-hidden="true" />
+                    Start Course
+                  </>
+                )}
+              </Button>
+              {isCourseDone && (
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => onNavigate('assessments')}
+                >
+                  <Award className="w-4 h-4" aria-hidden="true" />
+                  Take Assessment
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Course Index */}
-      {(() => {
-        // Group lessons by section
-        const sectionMap: Record<string, number[]> = {};
-        const sectionOrder: string[] = [];
-        (lessons || []).forEach((l, idx) => {
-          const sec = l.section || 'General';
-          if (!sectionMap[sec]) { sectionMap[sec] = []; sectionOrder.push(sec); }
-          sectionMap[sec].push(idx);
-        });
-
-        const PHASE_COLORS = ['#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444'];
-
-        const indexPhases: IndexPhase[] = sectionOrder.map((secName, pIdx) => ({
-          number: pIdx + 1,
-          name: secName,
-          color: PHASE_COLORS[pIdx % PHASE_COLORS.length],
-          bgColor: PHASE_COLORS[pIdx % PHASE_COLORS.length] + '10',
-          borderColor: PHASE_COLORS[pIdx % PHASE_COLORS.length],
-          description: '',
-          modules: sectionMap[secName].map(lIdx => ({
-            id: lessons[lIdx].id,
-            title: lessons[lIdx].title,
-            type: lessons[lIdx].type,
-            duration: lessons[lIdx].duration,
-            lessonIndex: lIdx,
-          } as IndexModule)),
-        }));
-
-        const getPhaseStatusForIndex = (phaseNum: number): 'completed' | 'in_progress' | 'locked' | 'not_started' => {
-          const phaseMods = indexPhases.find(p => p.number === phaseNum);
-          if (!phaseMods) return 'not_started';
-          const allDone = phaseMods.modules.every(m => lessons[m.lessonIndex] && completedLessons.has(lessons[m.lessonIndex].id));
-          if (allDone) return 'completed';
-          const anyDone = phaseMods.modules.some(m => lessons[m.lessonIndex] && completedLessons.has(lessons[m.lessonIndex].id));
-          const firstModIdx = phaseMods.modules[0]?.lessonIndex ?? 0;
-          const phaseUnlocked = isAdmin || isLessonAccessible(firstModIdx);
-          if (!phaseUnlocked) return 'locked';
-          if (anyDone) return 'in_progress';
-          // Check if current lesson is in this phase
-          if (phaseMods.modules.some(m => m.lessonIndex === currentLessonIndex)) return 'in_progress';
-          return 'not_started';
-        };
-
-        const getModuleStatusForIndex = (mod: IndexModule): 'completed' | 'current' | 'available' | 'locked' => {
-          const lessonId = lessons[mod.lessonIndex]?.id;
-          if (!lessonId) return 'locked';
-          if (completedLessons.has(lessonId)) return 'completed';
-          if (currentLessonIndex === mod.lessonIndex) return 'current';
-          if (!isLessonAccessible(mod.lessonIndex)) return 'locked';
-          return 'available';
-        };
-
-        const isPhaseUnlockedFn = (phaseNum: number): boolean => {
-          const phaseMods = indexPhases.find(p => p.number === phaseNum);
-          if (!phaseMods) return false;
-          const firstModIdx = phaseMods.modules[0]?.lessonIndex ?? 0;
-          return isAdmin || isLessonAccessible(firstModIdx);
-        };
-
-        return (
+          {/* Curriculum index */}
           <CourseIndex
             courseId={courseId}
             userId={user?.id || ''}
             phases={indexPhases}
-            getPhaseStatus={getPhaseStatusForIndex}
-            getModuleStatus={getModuleStatusForIndex}
-            isPhaseUnlocked={isPhaseUnlockedFn}
+            getPhaseStatus={getPhaseStatus}
+            getModuleStatus={getModuleStatus}
+            isPhaseUnlocked={isPhaseUnlocked}
             isAdmin={!!isAdmin}
-            onModuleClick={(lessonIdx) => setCurrentLessonIndex(lessonIdx)}
+            onModuleClick={openLesson}
           />
-        );
-      })()}
+        </div>
+      )}
 
-      <div className="flex gap-6">
-        {/* Curriculum Sidebar */}
-        <div className={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden flex-shrink-0`}>
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm h-[calc(100vh-280px)] overflow-y-auto scrollbar-thin">
-            <div className="p-4 border-b border-slate-100 sticky top-0 bg-white">
-              <h3 className="font-semibold text-slate-800">Course Curriculum</h3>
-              <p className="text-xs text-slate-500 mt-1">{lessons.length} lessons</p>
+      {/* ── Reader overlay ──────────────────────────────────────────────────── */}
+      {view === 'reader' && (
+        <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
+          {/* Top bar */}
+          <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 h-14 flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setView('overview')}
+              className="gap-1.5 flex-shrink-0"
+              aria-label="Back to course overview"
+            >
+              <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline text-sm">Overview</span>
+            </Button>
+
+            <p className="flex-1 min-w-0 text-sm font-medium text-slate-700 truncate text-center px-2">
+              {currentLesson?.title}
+            </p>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurriculumOpen(true)}
+              aria-label="Open course curriculum"
+              className="gap-1.5 flex-shrink-0"
+            >
+              <AlignLeft className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline text-sm">Contents</span>
+            </Button>
+          </header>
+
+          {/* Scrollable reading area */}
+          <main className="flex-1 overflow-y-auto" id="lesson-content">
+            <div className="max-w-[820px] mx-auto px-4 md:px-8 py-8">
+              {currentLesson && (
+                <LessonContent
+                  lesson={currentLesson}
+                  course={course}
+                  userId={user?.id || ''}
+                />
+              )}
             </div>
-            <div className="divide-y divide-slate-50">
-              {(() => {
-                // Group by section to add phase anchors
-                const sectionGroups: { name: string; startIndex: number }[] = [];
-                let lastSection: string | null = null;
-                lessons.forEach((l, idx) => {
-                  const sec = l.section || 'General';
-                  if (sec !== lastSection) {
-                    sectionGroups.push({ name: sec, startIndex: idx });
-                    lastSection = sec;
-                  }
-                });
-                return lessons.map((lesson, idx) => {
-                  const status = getLessonStatus(idx, lesson);
-                  const Icon = getLessonIcon(lesson.type);
-                  const sectionIdx = sectionGroups.findIndex(g => g.startIndex === idx);
-                  return (
-                    <button
-                      key={lesson.id}
-                      id={sectionIdx >= 0 ? `phase-${sectionIdx + 1}` : undefined}
-                      onClick={() => {
-                        if (status !== 'locked') setCurrentLessonIndex(idx);
-                      }}
-                      className={`w-full flex items-start gap-3 p-4 text-left transition-colors scroll-mt-4 ${
-                        status === 'current' ? 'bg-primary-50' : 'hover:bg-slate-50'
-                      } ${status === 'locked' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    >
-                    <div className="mt-0.5">
-                      {status === 'completed' ? (
-                        <CheckCircle2 className="w-5 h-5 text-green-500" />
-                      ) : status === 'current' || status === 'available' ? (
-                        <Play className="w-5 h-5 text-primary-600" />
-                      ) : (
-                        <Lock className="w-5 h-5 text-slate-300" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${status === 'current' ? 'text-primary-800' : 'text-slate-700'}`}>
-                        {idx + 1}. {lesson.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Icon className={`w-3.5 h-3.5 ${status === 'current' ? 'text-primary-500' : 'text-slate-400'}`} />
-                        <span className="text-xs text-slate-400">{lesson.duration || 'N/A'}</span>
+          </main>
+
+          {/* Bottom action bar */}
+          <div className="flex-shrink-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentLessonIndex(prev => prev - 1)}
+              disabled={currentLessonIndex === 0}
+              aria-label="Previous lesson"
+              className="flex-shrink-0"
+            >
+              <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Previous</span>
+            </Button>
+
+            <div className="flex-1 text-center">
+              <p className="text-xs text-slate-500">
+                {isCurrentCompleted
+                  ? 'Completed'
+                  : `Lesson ${currentLessonIndex + 1} of ${lessons.length}`}
+              </p>
+              <ProgressBar
+                value={progressPercent}
+                size="sm"
+                className="mt-1 max-w-[180px] mx-auto"
+              />
+            </div>
+
+            {isCurrentCompleted && !isLastLesson ? (
+              <Button
+                size="sm"
+                onClick={() => setCurrentLessonIndex(prev => prev + 1)}
+                className="flex-shrink-0 gap-1.5"
+              >
+                <span className="hidden sm:inline">Next Lesson</span>
+                <span className="sm:hidden">Next</span>
+                <ChevronRight className="w-4 h-4" aria-hidden="true" />
+              </Button>
+            ) : isCourseDone && isCurrentCompleted ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onNavigate('assessments')}
+                className="flex-shrink-0 gap-1.5"
+              >
+                <Award className="w-4 h-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Assessment</span>
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={markCompleteAndContinue}
+                className="flex-shrink-0 gap-1.5"
+              >
+                <Check className="w-4 h-4" aria-hidden="true" />
+                <span className="hidden sm:inline">{actionLabel}</span>
+                <span className="sm:hidden">{isLastLesson ? 'Finish' : 'Complete'}</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Curriculum drawer — sibling of reader, z-[80] ─────────────────── */}
+      {curriculumOpen && view === 'reader' && (
+        <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="Course curriculum">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setCurriculumOpen(false)}
+          />
+          <div className="absolute right-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100 flex-shrink-0">
+              <div>
+                <h2 className="font-semibold text-slate-800 text-sm">Course Curriculum</h2>
+                <p className="text-xs text-slate-400 mt-0.5">{lessons.length} lessons</p>
+              </div>
+              <Button
+                variant="ghost"
+                iconOnly
+                onClick={() => setCurriculumOpen(false)}
+                aria-label="Close curriculum"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {lessons.map((lesson, idx) => {
+                const status = getLessonStatus(idx, lesson);
+                const isCurrent = idx === currentLessonIndex;
+                const sectionStart = SectionGroups.find(g => g.startIndex === idx);
+
+                return (
+                  <div key={lesson.id}>
+                    {sectionStart && (
+                      <div className="px-4 py-2 bg-slate-50 border-b border-slate-100">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">
+                          {sectionStart.name}
+                        </p>
                       </div>
-                    </div>
-                  </button>
-                  );
-                });
-              })()}
+                    )}
+                    <button
+                      onClick={() => {
+                        if (status !== 'locked' || isAdmin) openLesson(idx);
+                      }}
+                      disabled={status === 'locked' && !isAdmin}
+                      aria-current={isCurrent ? 'true' : undefined}
+                      className={cn(
+                        'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors',
+                        isCurrent ? 'bg-primary-50' : 'hover:bg-slate-50',
+                        status === 'locked' && !isAdmin
+                          ? 'opacity-50 cursor-not-allowed'
+                          : 'cursor-pointer',
+                      )}
+                    >
+                      <div className="mt-0.5 flex-shrink-0">
+                        {status === 'completed' ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500" aria-hidden="true" />
+                        ) : status === 'locked' ? (
+                          <Lock className="w-4 h-4 text-slate-300" aria-hidden="true" />
+                        ) : (
+                          <span
+                            className={cn(
+                              'w-4 h-4 rounded-full border-2 block',
+                              isCurrent ? 'border-primary-500 bg-primary-500' : 'border-slate-300',
+                            )}
+                            aria-hidden="true"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={cn(
+                            'text-sm font-medium truncate',
+                            isCurrent ? 'text-primary-800' : 'text-slate-700',
+                            status === 'locked' && 'text-slate-400',
+                          )}
+                        >
+                          {idx + 1}. {lesson.title}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">{lesson.duration || 'N/A'}</p>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
+      )}
 
-        {/* Main Content */}
-        <div className="flex-1 min-w-0">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="mb-3 flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800 font-medium"
-          >
-            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            {sidebarOpen ? 'Hide Curriculum' : 'Show Curriculum'}
-          </button>
-
-          {currentLesson && (
-            <LessonContent
-              lesson={currentLesson}
-              course={course}
-              completedLessons={completedLessons}
-              currentLessonIndex={currentLessonIndex}
-              totalLessons={lessons.length}
-              userId={user?.id || ''}
-              onMarkComplete={markCompleteAndContinue}
-            />
-          )}
+      {/* ── Congrats overlay — z-[90] ───────────────────────────────────────── */}
+      {showCongrats && (
+        <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Award className="w-10 h-10 text-green-600" aria-hidden="true" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Congratulations!</h2>
+            <p className="text-slate-600 mb-6">
+              You have completed{' '}
+              <span className="font-semibold">{course.title}</span>.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={() => onNavigate('assessments')}>Take Assessment</Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowCongrats(false);
+                  setView('overview');
+                }}
+              >
+                Back to Overview
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
