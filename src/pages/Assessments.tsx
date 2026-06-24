@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import {
+  fetchAssessmentsData, fetchAssessmentQuestions, startAssessmentAttempt,
+  submitAssessment, createAssessment,
+  SALES_COURSE_ID, SALES_ASSESSMENT_ORDER,
+} from '../lib/api';
 import {
   ClipboardCheck, Clock, Trophy, Plus, X, ChevronDown, ChevronUp,
   GripVertical, Trash2, Save, Play, CheckCircle2, XCircle,
@@ -54,35 +59,30 @@ const QUESTION_TYPES = [
   { id: 'long_answer', label: 'Long Answer / Essay' },
 ];
 
-const SALES_COURSE_ID = 'cdbf91e9-7a4a-430d-8def-7a119a90e4b4';
-
-const SALES_ASSESSMENT_ORDER = [
-  'Phase 1 Assessment — Company & Products',
-  'Phase 2 Assessment — Customers & Market',
-  'Phase 3 Assessment — Competitive Positioning',
-  'Phase 4 Assessment — Sales Skills',
-  'Scenario-Based Final Assessment',
-];
-
 // ─── Component ──────────────────────────────────────────────────────
 export default function Assessments({ onNavigate }: { onNavigate: (page: string, data?: any) => void }) {
   const { user, isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   // View state: 'courses' | 'list' | 'take' | 'result' | 'builder'
   const [view, setView] = useState<'courses' | 'list' | 'take' | 'result' | 'builder'>('courses');
   const [selectedCourse, setSelectedCourse] = useState<CourseGroup | null>(null);
 
-  const [courseGroups, setCourseGroups] = useState<CourseGroup[]>([]);
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: assessmentsData, isLoading } = useQuery({
+    queryKey: ['assessments-data', user?.id],
+    queryFn: () => fetchAssessmentsData(user!.id),
+    enabled: !!user,
+  });
+  const courseGroups: CourseGroup[] = assessmentsData?.courseGroups ?? [];
+  const attempts: Attempt[] = assessmentsData?.attempts ?? [];
+  const questionCounts: Record<string, number> = assessmentsData?.questionCounts ?? {};
+  const allCourses: { id: string; title: string }[] = assessmentsData?.allCourses ?? [];
 
   // Builder state
   const [showBuilder, setShowBuilder] = useState(false);
   const [assessmentInfo, setAssessmentInfo] = useState({ title: '', course_id: '', time_limit: 30, passing_score: 70 });
   const [questions, setQuestions] = useState<any[]>([]);
   const [showQuestionTypeMenu, setShowQuestionTypeMenu] = useState(false);
-  const [allCourses, setAllCourses] = useState<{ id: string; title: string }[]>([]);
 
   // Taking assessment state
   const [takingAssessment, setTakingAssessment] = useState<Assessment | null>(null);
@@ -94,10 +94,6 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
   const [result, setResult] = useState<any>(null);
 
   useEffect(() => {
-    fetchData();
-  }, [user]);
-
-  useEffect(() => {
     if (!takingAssessment || submitted) return;
     const timer = setInterval(() => {
       setTimeLeft(prev => {
@@ -107,57 +103,6 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
     }, 1000);
     return () => clearInterval(timer);
   }, [takingAssessment, submitted]);
-
-  const fetchData = async () => {
-    if (!user) return;
-    setLoading(true);
-
-    const { data: aData } = await supabase.from('assessments').select('*, courses(title, department, thumbnail_url)').order('created_at', { ascending: false });
-    const { data: cData } = await supabase.from('courses').select('id, title');
-    const { data: atData } = await supabase.from('assessment_attempts').select('*').eq('user_id', user.id);
-    const assessmentsList = (aData || []).filter((a: Assessment) => a.course_id);
-    setAssessments(assessmentsList);
-    setAllCourses(cData || []);
-    setAttempts(atData || []);
-
-    // Group by course
-    const groups: Record<string, CourseGroup> = {};
-    for (const a of assessmentsList) {
-      const cid = a.course_id!;
-      if (!groups[cid]) {
-        groups[cid] = {
-          course_id: cid,
-          course_title: a.courses?.title || 'Unknown Course',
-          department: a.courses?.department || '',
-          thumbnail_url: a.courses?.thumbnail_url || null,
-          assessments: [],
-        };
-      }
-      groups[cid].assessments.push(a);
-    }
-
-    // Sort assessments within Sales Onboarding course
-    if (groups[SALES_COURSE_ID]) {
-      groups[SALES_COURSE_ID].assessments.sort((a, b) => {
-        const idxA = SALES_ASSESSMENT_ORDER.indexOf(a.title);
-        const idxB = SALES_ASSESSMENT_ORDER.indexOf(b.title);
-        if (idxA === -1 && idxB === -1) return 0;
-        if (idxA === -1) return 1;
-        if (idxB === -1) return -1;
-        return idxA - idxB;
-      });
-    }
-
-    // Sort courses: Sales first, then by title
-    const sortedGroups = Object.values(groups).sort((a, b) => {
-      if (a.course_id === SALES_COURSE_ID) return -1;
-      if (b.course_id === SALES_COURSE_ID) return 1;
-      return a.course_title.localeCompare(b.course_title);
-    });
-
-    setCourseGroups(sortedGroups);
-    setLoading(false);
-  };
 
   const getAttempt = (assessmentId: string) => attempts.find(a => a.assessment_id === assessmentId);
 
@@ -190,27 +135,16 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
 
   // ─── Assessment Taking ────────────────────────────────────────────
   const startAssessment = async (assessment: Assessment) => {
-    const { data: qData } = await supabase.from('questions').select('*').eq('assessment_id', assessment.id).order('order_index');
+    const questionsList = await fetchAssessmentQuestions(assessment.id);
     setTakingAssessment(assessment);
-    setTakingQuestions(qData || []);
+    setTakingQuestions(questionsList);
     setCurrentQuestionIndex(0);
     setAnswers({});
     setTimeLeft(assessment.time_limit * 60);
     setSubmitted(false);
     setResult(null);
     setView('take');
-
-    await supabase.from('assessment_attempts').insert({
-      user_id: user?.id,
-      assessment_id: assessment.id,
-      status: 'in_progress',
-    });
-    await supabase.from('activities').insert({
-      user_id: user?.id,
-      type: 'assessment_started',
-      title: 'Started an assessment',
-      description: assessment.title,
-    });
+    await startAssessmentAttempt(user!.id, assessment.id, assessment.title);
   };
 
   const formatTime = (seconds: number) => {
@@ -249,101 +183,48 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
 
     setResult({ score, passed, correct, total: totalGradable, review });
 
-    await supabase.from('assessment_attempts').update({
-      score,
-      status: passed ? 'passed' : 'failed',
-      answers,
-      submitted_at: new Date().toISOString(),
-    }).eq('user_id', user.id).eq('assessment_id', takingAssessment.id).eq('status', 'in_progress');
+    const salesPhaseIndex = takingAssessment.course_id === SALES_COURSE_ID
+      ? SALES_ASSESSMENT_ORDER.indexOf(takingAssessment.title)
+      : undefined;
 
-    await supabase.from('activities').insert({
-      user_id: user.id,
-      type: 'assessment_completed',
-      title: passed ? 'Passed an assessment' : 'Completed an assessment',
-      description: `${takingAssessment.title} - Score: ${score}%`,
+    await submitAssessment({
+      userId: user.id,
+      assessmentId: takingAssessment.id,
+      assessmentTitle: takingAssessment.title,
+      courseId: takingAssessment.course_id,
+      courseName: takingAssessment.courses?.title || takingAssessment.title,
+      score,
+      passed,
+      answers,
+      salesPhaseIndex,
     });
 
-    if (passed) {
-      await supabase.from('certificates').insert({
-        user_id: user.id,
-        course_id: takingAssessment.course_id,
-        course_name: takingAssessment.courses?.title || takingAssessment.title,
-        score,
-        certificate_id: `LMS-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-      });
-
-      // Update phase progress for Sales Onboarding
-      if (takingAssessment.course_id === SALES_COURSE_ID) {
-        const idx = SALES_ASSESSMENT_ORDER.indexOf(takingAssessment.title);
-        if (idx !== -1) {
-          const phaseNum = idx + 1;
-          await supabase.from('phase_progress').update({
-            assessment_passed: true,
-            assessment_score: score,
-            status: 'completed',
-          }).eq('user_id', user.id).eq('course_id', SALES_COURSE_ID).eq('phase_number', phaseNum);
-
-          if (phaseNum < 5) {
-            await supabase.from('phase_progress').update({ status: 'in_progress' }).eq('user_id', user.id).eq('course_id', SALES_COURSE_ID).eq('phase_number', phaseNum + 1);
-          }
-        }
-      }
-    }
-
-    // Refresh attempts
-    const { data: atData } = await supabase.from('assessment_attempts').select('*').eq('user_id', user.id);
-    setAttempts(atData || []);
-
+    await queryClient.invalidateQueries({ queryKey: ['assessments-data', user.id] });
     setView('result');
   };
 
-  // ─── Question Count ───────────────────────────────────────────────
-  const getQuestionCount = async (assessmentId: string) => {
-    const { count } = await supabase.from('questions').select('*', { count: 'exact', head: true }).eq('assessment_id', assessmentId);
-    return count || 0;
-  };
-
-  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    const loadCounts = async () => {
-      const counts: Record<string, number> = {};
-      for (const a of assessments) {
-        counts[a.id] = await getQuestionCount(a.id);
-      }
-      setQuestionCounts(counts);
-    };
-    if (assessments.length > 0) loadCounts();
-  }, [assessments]);
-
   // ─── Builder Functions ────────────────────────────────────────────
-  const handleCreateAssessment = async () => {
-    if (!assessmentInfo.title) return;
-    const { data, error } = await supabase.from('assessments').insert({
-      title: assessmentInfo.title,
-      course_id: assessmentInfo.course_id || null,
-      time_limit: assessmentInfo.time_limit,
-      passing_score: assessmentInfo.passing_score,
-    }).select().single();
+  const createMutation = useMutation({
+    mutationFn: () => createAssessment(
+      {
+        title: assessmentInfo.title,
+        course_id: assessmentInfo.course_id || null,
+        time_limit: assessmentInfo.time_limit,
+        passing_score: assessmentInfo.passing_score,
+      },
+      questions
+    ),
+    onSuccess: () => {
+      setShowBuilder(false);
+      setAssessmentInfo({ title: '', course_id: '', time_limit: 30, passing_score: 70 });
+      setQuestions([]);
+      queryClient.invalidateQueries({ queryKey: ['assessments-data', user?.id] });
+    },
+  });
 
-    if (data && !error) {
-      for (const q of questions) {
-        await supabase.from('questions').insert({
-          assessment_id: data.id,
-          type: q.type,
-          question_text: q.question_text,
-          options: q.options || null,
-          correct_answer: q.correct_answer || null,
-          matching_pairs: q.matching_pairs || null,
-          manual_grading: q.manual_grading || false,
-          order_index: q.order_index,
-        });
-      }
-    }
-    setShowBuilder(false);
-    setAssessmentInfo({ title: '', course_id: '', time_limit: 30, passing_score: 70 });
-    setQuestions([]);
-    fetchData();
+  const handleCreateAssessment = () => {
+    if (!assessmentInfo.title || questions.length === 0) return;
+    createMutation.mutate();
   };
 
   const addQuestion = (type: string) => {
@@ -816,7 +697,7 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
         </button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
         </div>

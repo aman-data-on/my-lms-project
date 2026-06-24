@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { fetchCertificates } from '../lib/api';
 import { Award, Download, Eye, X, GraduationCap, Calendar, TrendingUp, CheckCircle2, Star } from 'lucide-react';
 import { formatDate } from '../lib/utils';
 
@@ -22,24 +23,14 @@ const ADMIN_EXAMPLE_CERT: Certificate = {
 
 export default function Certificates() {
   const { user, isAdmin } = useAuth();
-  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
-  const [loading, setLoading] = useState(true);
   const certRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetch = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('certificates')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('issued_at', { ascending: false });
-      setCertificates(data || []);
-      setLoading(false);
-    };
-    fetch();
-  }, [user]);
+  const { data: certificates = [], isLoading } = useQuery({
+    queryKey: ['certificates', user?.id],
+    queryFn: () => fetchCertificates(user!.id),
+    enabled: !!user,
+  });
 
   const downloadPDF = async () => {
     if (!certRef.current || !selectedCert) return;
@@ -59,7 +50,7 @@ export default function Certificates() {
     pdf.save(`certificate-${selectedCert.certificate_id}.pdf`);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />

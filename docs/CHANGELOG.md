@@ -117,3 +117,95 @@ This must be applied manually by a database operator.
   1. Run `npm install` to add new packages.
   2. Incrementally migrate other pages to use `react-query` and `src/lib/api.ts`.
   3. Add devtools and configure retry/backoff policies for production readiness.
+
+---
+
+## P2 Completion — Foundation Improvements (All Sub-phases)
+
+- Date: 2026-06-24
+- Status: **COMPLETE**
+- Validation: `npx tsc --noEmit` — 0 errors | `npm run build` — success
+
+### P2-A — Route-level Code Splitting
+
+**Problem:** All 12 page components were statically imported in `App.tsx`, bundling them into a single 1,326 KB main chunk served on every page load.
+
+**Fix applied:**
+- Converted all 12 page imports to `React.lazy(() => import(...))`.
+- Added a `PageLoader` spinner component.
+- Wrapped `<Routes>` in `<Suspense fallback={<PageLoader />}>`.
+
+**Impact:** Main bundle 1,326 KB → 433 KB (−67%). Each page loads only when first visited.
+
+**Files modified:** `src/App.tsx`
+
+---
+
+### P2-B — Lazy-load jsPDF + html2canvas
+
+**Problem:** `Certificates.tsx` statically imported `jspdf` (358 KB) and `html2canvas` (202 KB), adding 560 KB to the Certificates chunk on every load even if the user never downloads a certificate.
+
+**Fix applied:**
+- Removed static `import` statements for both libraries.
+- Added dynamic `Promise.all([import('html2canvas'), import('jspdf')])` inside `downloadPDF()` — libraries load only when the user clicks download.
+
+**Impact:** Certificates chunk 572 KB → 11 KB (−98%). PDF libraries load on demand.
+
+**Files modified:** `src/pages/Certificates.tsx`
+
+---
+
+### P2-C — react-query Migration: MyCourses, CourseLibrary, Certificates, Settings
+
+**Problem:** Four pages used `useEffect` + `useState` for data fetching with direct `supabase` client calls. This produced duplicate requests on remount, no caching, inconsistent loading states, and no central error handling layer.
+
+**Fix applied per page:**
+
+| Page | Pattern | Changes |
+|------|---------|---------|
+| `MyCourses` | `useQuery` (read) | Removed `useEffect`/`useState`, added `fetchMyCourses` in api.ts |
+| `CourseLibrary` | `useQuery` + `useMutation` | Parallel fetch courses+enrollments, `enrollInCourse` mutation with cache invalidation |
+| `Certificates` | `useQuery` (read) | Replaced `useEffect`/`useState`, added `fetchCertificates` in api.ts |
+| `Settings` | `useMutation` (write) | Replaced direct Supabase update, `updateProfile` mutation with `refreshUser()` callback |
+
+**api.ts additions:** `fetchMyCourses`, `fetchCourseLibrary`, `enrollInCourse`, `fetchCertificates`, `updateProfile`
+
+**Files modified:** `src/lib/api.ts`, `src/pages/MyCourses.tsx`, `src/pages/CourseLibrary.tsx`, `src/pages/Certificates.tsx`, `src/pages/Settings.tsx`
+
+---
+
+### P2-D — react-query Migration: Assessments
+
+**Problem:** `Assessments.tsx` had 4 distinct server-data paths using direct `supabase` calls, including an N+1 serial loop that fetched question counts one assessment at a time.
+
+**Fix applied:**
+- **Main data load:** Replaced `fetchData()` + `useEffect` with `useQuery(['assessments-data', userId])` calling `fetchAssessmentsData()`. Grouping and sorting logic moved to api.ts.
+- **Question counts:** Replaced N serial `select count` queries with a single `.in('assessment_id', ids)` query + JS aggregation. O(N) queries → 1 query.
+- **`startAssessment`:** Replaced inline `supabase` calls with `fetchAssessmentQuestions()` + `startAssessmentAttempt()` from api.ts.
+- **`handleSubmit`:** Replaced 5–6 inline `supabase` calls (attempt update, activity, certificate, phase_progress) with `submitAssessment()`. Cache invalidated via `queryClient.invalidateQueries` instead of manual re-fetch.
+- **`handleCreateAssessment`:** Replaced direct Supabase insert loop with `useMutation` calling `createAssessment()`.
+- **Timer `useEffect`:** Unchanged — pure client state, no server dependency.
+
+**api.ts additions:** `SALES_COURSE_ID` (exported const), `SALES_ASSESSMENT_ORDER` (exported const), `fetchAssessmentsData`, `fetchAssessmentQuestions`, `startAssessmentAttempt`, `submitAssessment`, `createAssessment`
+
+**Files modified:** `src/lib/api.ts`, `src/pages/Assessments.tsx`
+
+---
+
+### P2 Bundle Summary
+
+| Chunk | Before P2 | After P2 | Δ |
+|-------|-----------|----------|---|
+| Main index | 1,326 KB | 433 KB | −67% |
+| Certificates | 572 KB | 11 KB | −98% |
+| Assessments | ~30 KB | 27 KB | −9% |
+| jsPDF | (always loaded) | 358 KB on demand | deferred |
+| html2canvas | (always loaded) | 202 KB on demand | deferred |
+
+### P2 Direct Supabase Calls Eliminated
+
+All pages now route server data through `src/lib/api.ts` and react-query. No page component imports `supabase` directly for data fetching (the Supabase client remains only in `api.ts` and `AuthContext`).
+
+Pages fully migrated: `Dashboard`, `CourseDetail`, `MyCourses`, `CourseLibrary`, `Certificates`, `Settings`, `Assessments`
+
+Pages deferred (P2-E, per original plan): `AdminPanel`, `CourseBuilder` — high complexity, admin-only, regression risk.

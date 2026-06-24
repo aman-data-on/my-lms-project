@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { fetchCourseLibrary, enrollInCourse } from '../lib/api';
 import {
   Search, BookOpen, Clock, ChevronDown, Play,
   CheckCircle2, Circle
@@ -27,25 +28,24 @@ const STATUSES = ['All', 'In Progress', 'Completed', 'Not Started'];
 
 export default function CourseLibrary({ onNavigate }: { onNavigate: (page: string, data?: any) => void }) {
   const { user, isAdmin } = useAuth();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchCourses();
-  }, [user]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['course-library', user?.id],
+    queryFn: () => fetchCourseLibrary(user!.id),
+    enabled: !!user,
+  });
+  const courses: Course[] = data?.courses ?? [];
+  const enrollments: Enrollment[] = data?.enrollments ?? [];
 
-  const fetchCourses = async () => {
-    setLoading(true);
-    const { data: courseData } = await supabase.from('courses').select('*').eq('status', 'published').order('created_at', { ascending: false });
-    const { data: enrollData } = await supabase.from('enrollments').select('course_id, status, progress_percent').eq('user_id', user?.id);
-    setCourses(courseData || []);
-    setEnrollments(enrollData || []);
-    setLoading(false);
-  };
+  const enrollMutation = useMutation({
+    mutationFn: ({ courseId, courseTitle }: { courseId: string; courseTitle: string }) =>
+      enrollInCourse(user!.id, courseId, courseTitle),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['course-library', user?.id] }),
+  });
 
   const getEnrollment = (courseId: string) => enrollments.find(e => e.course_id === courseId);
 
@@ -64,11 +64,9 @@ export default function CourseLibrary({ onNavigate }: { onNavigate: (page: strin
     return matchesSearch && matchesDept && matchesStatus;
   });
 
-  const handleEnroll = async (courseId: string) => {
-    if (!user) return;
-    await supabase.from('enrollments').insert({ user_id: user.id, course_id: courseId, status: 'in_progress', progress_percent: 0 });
-    await supabase.from('activities').insert({ user_id: user.id, type: 'course_enrolled', title: 'Enrolled in a new course', description: courses.find(c => c.id === courseId)?.title });
-    fetchCourses();
+  const handleEnroll = (courseId: string) => {
+    const courseTitle = courses.find(c => c.id === courseId)?.title ?? '';
+    enrollMutation.mutate({ courseId, courseTitle });
   };
 
   const deptColors: Record<string, string> = {
@@ -124,7 +122,7 @@ export default function CourseLibrary({ onNavigate }: { onNavigate: (page: strin
       </div>
 
       {/* Course Grid */}
-      {loading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
         </div>

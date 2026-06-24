@@ -1,13 +1,13 @@
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { updateProfile } from '../lib/api';
 import { User, Building2, Briefcase, Mail, IdCard, Calendar, Camera, Save } from 'lucide-react';
 
 const DEPARTMENTS = ['HR', 'IT', 'Finance', 'Sales', 'Operations', 'Marketing'];
 
 export default function Settings() {
   const { user, refreshUser } = useAuth();
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -18,37 +18,21 @@ export default function Settings() {
     job_title: user?.job_title || '',
   });
 
-  const handleSave = async () => {
-    if (!user) return;
+  const mutation = useMutation({
+    mutationFn: () => updateProfile(user!.id, form),
+    onSuccess: async () => {
+      await refreshUser();
+      setMessage('Profile updated successfully');
+      setTimeout(() => setMessage(''), 3000);
+    },
+    onError: (err: any) => setError(err.message || 'Failed to update profile'),
+  });
 
-    setSaving(true);
+  const handleSave = () => {
+    if (!user) return;
     setError('');
     setMessage('');
-
-    try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          full_name: form.full_name,
-          employee_id: form.employee_id,
-          department: form.department,
-          job_title: form.job_title,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-
-      if (updateError) {
-        setError(updateError.message);
-      } else {
-        await refreshUser();
-        setMessage('Profile updated successfully');
-        setTimeout(() => setMessage(''), 3000);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to update profile');
-    } finally {
-      setSaving(false);
-    }
+    mutation.mutate();
   };
 
   return (
@@ -174,11 +158,11 @@ export default function Settings() {
         <div className="mt-6 pt-6 border-t border-slate-100">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={mutation.isPending}
             className="px-6 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save Changes'}
+            {mutation.isPending ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>

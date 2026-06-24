@@ -44,6 +44,209 @@ export async function insertActivity(payload: any) {
   return data;
 }
 
+export async function fetchMyCourses(userId: string) {
+  const { data, error } = await supabase
+    .from('enrollments')
+    .select('progress_percent, status, enrolled_at, courses(id, title, description, department, thumbnail_url, duration)')
+    .eq('user_id', userId)
+    .order('enrolled_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    id: row.courses.id,
+    title: row.courses.title,
+    description: row.courses.description,
+    department: row.courses.department,
+    thumbnail_url: row.courses.thumbnail_url,
+    duration: row.courses.duration,
+    progress_percent: row.progress_percent,
+    status: row.status,
+    enrolled_at: row.enrolled_at,
+  }));
+}
+
+export async function fetchCourseLibrary(userId: string) {
+  const [{ data: courseData, error: courseError }, { data: enrollData, error: enrollError }] = await Promise.all([
+    supabase.from('courses').select('*').eq('status', 'published').order('created_at', { ascending: false }),
+    supabase.from('enrollments').select('course_id, status, progress_percent').eq('user_id', userId),
+  ]);
+  if (courseError) throw courseError;
+  if (enrollError) throw enrollError;
+  return { courses: courseData || [], enrollments: enrollData || [] };
+}
+
+export async function enrollInCourse(userId: string, courseId: string, courseTitle: string) {
+  const { error: enrollError } = await supabase.from('enrollments').insert({ user_id: userId, course_id: courseId, status: 'in_progress', progress_percent: 0 });
+  if (enrollError) throw enrollError;
+  await supabase.from('activities').insert({ user_id: userId, type: 'course_enrolled', title: 'Enrolled in a new course', description: courseTitle });
+}
+
+export async function fetchCertificates(userId: string) {
+  const { data, error } = await supabase.from('certificates').select('*').eq('user_id', userId).order('issued_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateProfile(userId: string, data: { full_name: string; employee_id: string; department: string; job_title: string }) {
+  const { error } = await supabase.from('profiles').update({ ...data, updated_at: new Date().toISOString() }).eq('id', userId);
+  if (error) throw error;
+}
+
+export const SALES_COURSE_ID = 'cdbf91e9-7a4a-430d-8def-7a119a90e4b4';
+
+export const SALES_ASSESSMENT_ORDER = [
+  'Phase 1 Assessment — Company & Products',
+  'Phase 2 Assessment — Customers & Market',
+  'Phase 3 Assessment — Competitive Positioning',
+  'Phase 4 Assessment — Sales Skills',
+  'Scenario-Based Final Assessment',
+];
+
+export async function fetchAssessmentsData(userId: string) {
+  const [
+    { data: aData, error: aError },
+    { data: cData, error: cError },
+    { data: atData, error: atError },
+  ] = await Promise.all([
+    supabase.from('assessments').select('*, courses(title, department, thumbnail_url)').order('created_at', { ascending: false }),
+    supabase.from('courses').select('id, title'),
+    supabase.from('assessment_attempts').select('*').eq('user_id', userId),
+  ]);
+  if (aError) throw aError;
+  if (cError) throw cError;
+  if (atError) throw atError;
+
+  const assessmentsList = (aData || []).filter((a: any) => a.course_id);
+
+  // Batch fetch all question counts in one query instead of N serial queries
+  const questionCounts: Record<string, number> = {};
+  if (assessmentsList.length > 0) {
+    const ids = assessmentsList.map((a: any) => a.id);
+    const { data: qData } = await supabase.from('questions').select('assessment_id').in('assessment_id', ids);
+    for (const q of qData || []) {
+      questionCounts[q.assessment_id] = (questionCounts[q.assessment_id] || 0) + 1;
+    }
+  }
+
+  // Group assessments by course
+  const groups: Record<string, any> = {};
+  for (const a of assessmentsList) {
+    const cid = a.course_id;
+    if (!groups[cid]) {
+      groups[cid] = {
+        course_id: cid,
+        course_title: a.courses?.title || 'Unknown Course',
+        department: a.courses?.department || '',
+        thumbnail_url: a.courses?.thumbnail_url || null,
+        assessments: [],
+      };
+    }
+    groups[cid].assessments.push(a);
+  }
+
+  // Sort assessments within Sales course by defined phase order
+  if (groups[SALES_COURSE_ID]) {
+    groups[SALES_COURSE_ID].assessments.sort((a: any, b: any) => {
+      const idxA = SALES_ASSESSMENT_ORDER.indexOf(a.title);
+      const idxB = SALES_ASSESSMENT_ORDER.indexOf(b.title);
+      if (idxA === -1 && idxB === -1) return 0;
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
+  }
+
+  const courseGroups = Object.values(groups).sort((a: any, b: any) => {
+    if (a.course_id === SALES_COURSE_ID) return -1;
+    if (b.course_id === SALES_COURSE_ID) return 1;
+    return a.course_title.localeCompare(b.course_title);
+  });
+
+  return { courseGroups, allCourses: cData || [], attempts: atData || [], questionCounts };
+}
+
+export async function fetchAssessmentQuestions(assessmentId: string) {
+  const { data, error } = await supabase.from('questions').select('*').eq('assessment_id', assessmentId).order('order_index');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function startAssessmentAttempt(userId: string, assessmentId: string, assessmentTitle: string) {
+  await supabase.from('assessment_attempts').insert({ user_id: userId, assessment_id: assessmentId, status: 'in_progress' });
+  await supabase.from('activities').insert({ user_id: userId, type: 'assessment_started', title: 'Started an assessment', description: assessmentTitle });
+}
+
+export async function submitAssessment(params: {
+  userId: string;
+  assessmentId: string;
+  assessmentTitle: string;
+  courseId: string | null;
+  courseName: string;
+  score: number;
+  passed: boolean;
+  answers: Record<string, any>;
+  salesPhaseIndex?: number;
+}) {
+  const { userId, assessmentId, assessmentTitle, courseId, courseName, score, passed, answers, salesPhaseIndex } = params;
+
+  await supabase.from('assessment_attempts').update({
+    score,
+    status: passed ? 'passed' : 'failed',
+    answers,
+    submitted_at: new Date().toISOString(),
+  }).eq('user_id', userId).eq('assessment_id', assessmentId).eq('status', 'in_progress');
+
+  await supabase.from('activities').insert({
+    user_id: userId,
+    type: 'assessment_completed',
+    title: passed ? 'Passed an assessment' : 'Completed an assessment',
+    description: `${assessmentTitle} - Score: ${score}%`,
+  });
+
+  if (passed) {
+    await supabase.from('certificates').insert({
+      user_id: userId,
+      course_id: courseId,
+      course_name: courseName,
+      score,
+      certificate_id: `LMS-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+    });
+
+    if (courseId === SALES_COURSE_ID && salesPhaseIndex !== undefined && salesPhaseIndex !== -1) {
+      const phaseNum = salesPhaseIndex + 1;
+      await supabase.from('phase_progress').update({
+        assessment_passed: true,
+        assessment_score: score,
+        status: 'completed',
+      }).eq('user_id', userId).eq('course_id', SALES_COURSE_ID).eq('phase_number', phaseNum);
+
+      if (phaseNum < 5) {
+        await supabase.from('phase_progress').update({ status: 'in_progress' })
+          .eq('user_id', userId).eq('course_id', SALES_COURSE_ID).eq('phase_number', phaseNum + 1);
+      }
+    }
+  }
+}
+
+export async function createAssessment(
+  data: { title: string; course_id: string | null; time_limit: number; passing_score: number },
+  questions: any[]
+) {
+  const { data: assessment, error } = await supabase.from('assessments').insert(data).select().single();
+  if (error) throw error;
+  for (const q of questions) {
+    await supabase.from('questions').insert({
+      assessment_id: assessment.id,
+      type: q.type,
+      question_text: q.question_text,
+      options: q.options || null,
+      correct_answer: q.correct_answer || null,
+      matching_pairs: q.matching_pairs || null,
+      manual_grading: q.manual_grading || false,
+      order_index: q.order_index,
+    });
+  }
+}
+
 export async function fetchDashboardData(userId: string) {
   const { data: enrollments, error: enrollmentsError } = await supabase
     .from('enrollments')

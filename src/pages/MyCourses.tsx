@@ -1,55 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { fetchMyCourses } from '../lib/api';
 import { BookOpen, Clock, Play, CheckCircle2 } from 'lucide-react';
 
-interface CourseWithProgress {
-  id: string;
-  title: string;
-  description: string;
-  department: string;
-  thumbnail_url: string | null;
-  duration: string;
-  progress_percent: number;
-  status: string;
-  enrolled_at: string;
-}
 
 export default function MyCourses({ onNavigate }: { onNavigate: (page: string, data?: any) => void }) {
   const { user } = useAuth();
-  const [courses, setCourses] = useState<CourseWithProgress[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: courses = [], isLoading } = useQuery({
+    queryKey: ['my-courses', user?.id],
+    queryFn: () => fetchMyCourses(user!.id),
+    enabled: !!user,
+  });
 
-  useEffect(() => {
-    const fetch = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('enrollments')
-        .select('progress_percent, status, enrolled_at, courses(id, title, description, department, thumbnail_url, duration)')
-        .eq('user_id', user.id)
-        .order('enrolled_at', { ascending: false });
-
-      const mapped = (data || []).map((row: any) => {
-        const c = row.courses;
-        return {
-          id: c.id,
-          title: c.title,
-          description: c.description,
-          department: c.department,
-          thumbnail_url: c.thumbnail_url,
-          duration: c.duration,
-          progress_percent: row.progress_percent,
-          status: row.status,
-          enrolled_at: row.enrolled_at,
-        };
-      });
-      setCourses(mapped);
-      setLoading(false);
-    };
-    fetch();
-  }, [user]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
