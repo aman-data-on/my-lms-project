@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { GraduationCap, Eye, EyeOff, Mail, Lock, User, Briefcase, Building2, IdCard } from 'lucide-react';
 
@@ -12,10 +12,12 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/';
 
   useEffect(() => {
-    if (!authLoading && user) navigate('/', { replace: true });
-  }, [user, authLoading, navigate]);
+    if (!authLoading && user) navigate(from, { replace: true });
+  }, [user, authLoading, navigate, from]);
 
   const [form, setForm] = useState({
     full_name: '',
@@ -53,7 +55,7 @@ export default function AuthPage() {
       if (mode === 'signin') {
         const { error: err } = await signIn(form.email, form.password);
         if (err) setError(err);
-        else navigate('/');
+        else navigate(from, { replace: true });
       } else {
         const { error: err } = await signUp(form);
         if (err) setError(err);

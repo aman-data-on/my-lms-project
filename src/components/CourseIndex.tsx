@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
-  ChevronDown, ChevronUp, ChevronRight, CheckCircle2, PlayCircle, Lock,
-  BookOpen, Play, FileText, ArrowRight
+  ChevronDown, CheckCircle2, PlayCircle, Lock,
+  BookOpen, Play, FileText, ArrowRight,
 } from 'lucide-react';
 import { cn } from '../lib/cn';
 
@@ -36,18 +36,16 @@ interface CourseIndexProps {
   isPhaseUnlocked: (phaseNum: number) => boolean;
   isAdmin: boolean;
   onModuleClick: (lessonIndex: number) => void;
-  /** Phase numbers to expand on first render. Defaults to all phases. */
+  /** Phase numbers to expand on first render. When provided, only those phases open; others stay collapsed. */
   defaultExpandedPhases?: number[];
 }
 
-// Strip redundant "Phase N — " prefix if the name already contains it
 function cleanPhaseName(name: string): string {
   return name.replace(/^Phase \d+\s*[—–-]\s*/i, '');
 }
 
 export function CourseIndex({
   courseId,
-  userId,
   phases,
   getPhaseStatus,
   getModuleStatus,
@@ -56,226 +54,265 @@ export function CourseIndex({
   onModuleClick,
   defaultExpandedPhases,
 }: CourseIndexProps) {
-  const storageKey = `course-index-${courseId}-${userId}`;
-  const [allCollapsed, setAllCollapsed] = useState(false);
-  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(
-    () => defaultExpandedPhases
-      ? new Set(defaultExpandedPhases)
-      : new Set(phases.map(p => p.number)),
+  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(() =>
+    defaultExpandedPhases ? new Set(defaultExpandedPhases) : new Set(),
   );
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved !== null) setAllCollapsed(saved === 'true');
-    } catch { /* ignore */ }
-  }, [storageKey]);
-
-  const toggleAll = () => {
-    const next = !allCollapsed;
-    setAllCollapsed(next);
-    try { localStorage.setItem(storageKey, String(next)); } catch { /* ignore */ }
-  };
 
   const togglePhase = (phaseNum: number) => {
     setExpandedPhases(prev => {
       const next = new Set(prev);
-      if (next.has(phaseNum)) next.delete(phaseNum);
-      else next.add(phaseNum);
+      if (next.has(phaseNum)) {
+        next.delete(phaseNum);
+      } else {
+        // Accordion: close all others, open only this one
+        next.clear();
+        next.add(phaseNum);
+      }
       return next;
     });
   };
 
+  const expandAll = () => setExpandedPhases(new Set(phases.map(p => p.number)));
+  const collapseAll = () => setExpandedPhases(new Set());
+  const anyExpanded = expandedPhases.size > 0;
+
   if (phases.length === 0) return null;
 
+  const totalLessons = phases.reduce((acc, p) => acc + p.modules.length, 0);
+
   return (
-    <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+    <div>
+      {/* Curriculum header */}
+      <div className="flex items-center justify-between mb-3 px-1">
         <div>
           <h3 className="font-semibold text-slate-800">Course Curriculum</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            {phases.length} phases · {phases.reduce((acc, p) => acc + p.modules.length, 0)} lessons
+            {phases.length} phases · {totalLessons} lessons
           </p>
         </div>
         <button
-          onClick={toggleAll}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 font-medium px-3 py-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+          onClick={anyExpanded ? collapseAll : expandAll}
+          className="text-sm text-slate-500 hover:text-primary-700 font-medium px-3 py-1.5 hover:bg-slate-100 rounded-lg transition-colors"
         >
-          {allCollapsed ? (
-            <><ChevronDown className="w-4 h-4" /> Show all</>
-          ) : (
-            <><ChevronUp className="w-4 h-4" /> Hide all</>
-          )}
+          {anyExpanded ? 'Collapse all' : 'Expand all'}
         </button>
       </div>
 
-      {/* Body */}
-      <div
-        className="overflow-hidden transition-all duration-300 ease-in-out"
-        style={{ maxHeight: allCollapsed ? '0px' : '6000px' }}
-      >
-        <div className="divide-y divide-slate-50">
-          {phases.map((phase) => {
-            const phaseStatus = getPhaseStatus(phase.number);
-            const unlocked = isAdmin || isPhaseUnlocked(phase.number);
-            const isPhaseOpen = expandedPhases.has(phase.number);
-            const cleanName = cleanPhaseName(phase.name);
+      {/* Phase cards */}
+      <div className="space-y-3">
+        {phases.map((phase) => {
+          const phaseStatus = getPhaseStatus(phase.number);
+          const unlocked = isAdmin || isPhaseUnlocked(phase.number);
+          const isOpen = expandedPhases.has(phase.number);
+          const cleanName = cleanPhaseName(phase.name);
+          const panelId = `phase-panel-${courseId}-${phase.number}`;
+          const triggerId = `phase-trigger-${courseId}-${phase.number}`;
 
-            const totalMods = phase.modules.length;
-            const completedMods = phase.modules.filter(m => {
-              const s = getModuleStatus(m, m.lessonIndex);
-              return s === 'completed';
-            }).length;
+          const totalMods = phase.modules.length;
+          const completedMods = phase.modules.filter(m =>
+            getModuleStatus(m, m.lessonIndex) === 'completed',
+          ).length;
 
-            return (
-              <div key={phase.number}>
-                {/* Phase header — click to expand/collapse */}
-                <button
-                  onClick={() => togglePhase(phase.number)}
-                  aria-expanded={isPhaseOpen}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-6 py-4 text-left transition-colors',
-                    !unlocked ? 'opacity-70' : 'hover:bg-slate-50',
+          const isCurrentPhase = phaseStatus === 'in_progress';
+          const isCompletePhase = phaseStatus === 'completed';
+
+          return (
+            <div
+              key={phase.number}
+              className={cn(
+                'bg-white rounded-xl border overflow-hidden',
+                isCurrentPhase
+                  ? 'border-primary-200 shadow-sm'
+                  : isCompletePhase
+                  ? 'border-green-100'
+                  : 'border-slate-200',
+                !unlocked && 'opacity-75',
+              )}
+            >
+              {/* Phase trigger */}
+              <button
+                id={triggerId}
+                onClick={() => togglePhase(phase.number)}
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                className={cn(
+                  'w-full flex items-center gap-3 px-5 py-4 text-left min-h-[64px] transition-colors',
+                  isCurrentPhase
+                    ? 'hover:bg-primary-50/40'
+                    : unlocked
+                    ? 'hover:bg-slate-50'
+                    : 'cursor-default',
+                )}
+              >
+                {/* Phase colour dot */}
+                <span
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5"
+                  style={{ backgroundColor: phase.color }}
+                  aria-hidden="true"
+                />
+
+                {/* Phase label */}
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+                    Phase {phase.number}
+                  </p>
+                  <p className={cn(
+                    'text-sm font-semibold leading-snug truncate',
+                    !unlocked
+                      ? 'text-slate-400'
+                      : isCurrentPhase
+                      ? 'text-primary-900'
+                      : 'text-slate-800',
+                  )}>
+                    {cleanName}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {unlocked ? (
+                      `${completedMods} of ${totalMods} lessons completed`
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Lock className="w-3 h-3" aria-hidden="true" />
+                        Complete Phase {phase.number - 1} to unlock
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Status + chevron */}
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  {isCompletePhase && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-full">
+                      <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                      Completed
+                    </span>
                   )}
-                >
-                  {/* Phase colour dot */}
-                  <span
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5"
-                    style={{ backgroundColor: phase.color }}
+                  {isCurrentPhase && unlocked && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 bg-primary-50 text-primary-700 text-xs font-medium rounded-full">
+                      <PlayCircle className="w-3 h-3" aria-hidden="true" />
+                      In progress
+                    </span>
+                  )}
+                  {!unlocked && (
+                    <Lock className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
+                  )}
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 text-slate-400 transition-transform duration-200',
+                      isOpen && 'rotate-180',
+                    )}
                     aria-hidden="true"
                   />
+                </div>
+              </button>
 
-                  {/* Phase label + meta */}
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex-shrink-0">
-                        Phase {phase.number}
-                      </span>
-                      <span className="font-semibold text-slate-800 text-sm leading-snug">
-                        {cleanName}
-                      </span>
-                    </div>
-                    {unlocked ? (
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {completedMods} / {totalMods} completed
-                      </p>
-                    ) : (
-                      <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                        <Lock className="w-3 h-3" aria-hidden="true" />
-                        Complete previous phase to unlock
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Status badge */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {phaseStatus === 'completed' && (
-                      <span className="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-full flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Done
-                      </span>
-                    )}
-                    {phaseStatus === 'in_progress' && unlocked && (
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-medium rounded-full flex items-center gap-1">
-                        <PlayCircle className="w-3 h-3" aria-hidden="true" /> In progress
-                      </span>
-                    )}
-                    {isPhaseOpen
-                      ? <ChevronDown className="w-4 h-4 text-slate-400" aria-hidden="true" />
-                      : <ChevronRight className="w-4 h-4 text-slate-400" aria-hidden="true" />
-                    }
-                  </div>
-                </button>
-
-                {/* Module list */}
-                {isPhaseOpen && (
-                  <div className="pb-2">
-                    {phase.modules.map((mod) => {
-                      const modStatus = isAdmin ? 'available' : getModuleStatus(mod, mod.lessonIndex);
-                      const isLocked = modStatus === 'locked';
-                      const isCompleted = modStatus === 'completed';
-                      const isCurrent = modStatus === 'current';
-
-                      const globalLessonNum = mod.lessonIndex + 1;
-
-                      const typeIcon = mod.type === 'video'
-                        ? Play
-                        : mod.type === 'quiz' || mod.type === 'assessment'
-                          ? FileText
-                          : BookOpen;
-
-                      const subText = mod.duration || 'N/A';
-
-                      return (
-                        <button
-                          key={mod.id + '-' + mod.lessonIndex}
-                          onClick={() => {
-                            if (!isLocked || isAdmin) onModuleClick(mod.lessonIndex);
-                          }}
-                          disabled={isLocked && !isAdmin}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-6 py-3 text-left transition-colors',
-                            isLocked
-                              ? 'opacity-50 cursor-not-allowed'
-                              : 'hover:bg-slate-50 cursor-pointer',
-                            isCurrent ? 'bg-primary-50 hover:bg-primary-50' : '',
-                          )}
-                        >
-                          {/* Lesson number */}
-                          <span
-                            className={cn(
-                              'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
-                              isCompleted
-                                ? 'bg-green-100 text-green-700'
-                                : isCurrent
-                                  ? 'bg-primary-100 text-primary-700'
-                                  : isLocked
-                                    ? 'bg-slate-100 text-slate-400'
-                                    : 'bg-slate-100 text-slate-600',
-                            )}
-                            aria-hidden="true"
-                          >
-                            {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : globalLessonNum}
-                          </span>
-
-                          {/* Title + meta */}
-                          <div className="flex-1 min-w-0">
-                            <p className={cn(
-                              'text-sm font-medium truncate',
-                              isLocked ? 'text-slate-400' : isCurrent ? 'text-primary-800' : 'text-slate-700',
-                            )}>
-                              {mod.title}
-                            </p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {(() => {
-                                const Icon = typeIcon;
-                                return <Icon className="w-3 h-3 text-slate-400" aria-hidden="true" />;
-                              })()}
-                              <span className="text-xs text-slate-400">{subText}</span>
-                            </div>
-                          </div>
-
-                          {/* Right status */}
-                          <div className="flex-shrink-0">
-                            {isCompleted ? (
-                              <CheckCircle2 className="w-4 h-4 text-green-500" aria-hidden="true" />
-                            ) : isCurrent ? (
-                              <span className="w-2 h-2 rounded-full bg-primary-500" aria-hidden="true" />
-                            ) : isLocked ? (
-                              <Lock className="w-4 h-4 text-slate-300" aria-hidden="true" />
-                            ) : (
-                              <ArrowRight className="w-4 h-4 text-slate-300" aria-hidden="true" />
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Module panel — CSS grid animation */}
+              <div
+                id={panelId}
+                role="region"
+                aria-labelledby={triggerId}
+                className={cn(
+                  'grid transition-[grid-template-rows] duration-200 ease-in-out',
+                  isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                 )}
+              >
+                <div className="overflow-hidden">
+                  <div className="border-t border-slate-100">
+                    {!unlocked ? (
+                      <div className="flex items-center gap-2 px-5 py-4 text-sm text-slate-500">
+                        <Lock className="w-4 h-4 text-slate-300 flex-shrink-0" aria-hidden="true" />
+                        Complete Phase {phase.number - 1} to unlock this phase.
+                      </div>
+                    ) : (
+                      phase.modules.map((mod, modIdx) => {
+                        const modStatus = isAdmin
+                          ? 'available'
+                          : getModuleStatus(mod, mod.lessonIndex);
+                        const isLocked = modStatus === 'locked';
+                        const isCompleted = modStatus === 'completed';
+                        const isCurrent = modStatus === 'current';
+                        const globalNum = mod.lessonIndex + 1;
+
+                        const TypeIcon =
+                          mod.type === 'video'
+                            ? Play
+                            : mod.type === 'quiz' || mod.type === 'assessment'
+                            ? FileText
+                            : BookOpen;
+
+                        return (
+                          <button
+                            key={`${mod.id}-${mod.lessonIndex}`}
+                            onClick={() => {
+                              if (!isLocked || isAdmin) onModuleClick(mod.lessonIndex);
+                            }}
+                            disabled={isLocked && !isAdmin}
+                            className={cn(
+                              'w-full flex items-center gap-3 px-5 py-3 text-left min-h-[44px] transition-colors',
+                              modIdx > 0 && 'border-t border-slate-50',
+                              isLocked && !isAdmin
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'hover:bg-slate-50 cursor-pointer',
+                              isCurrent && 'bg-primary-50 hover:bg-primary-50/80',
+                            )}
+                          >
+                            {/* State icon */}
+                            <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                              {isCompleted ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-500" aria-hidden="true" />
+                              ) : isLocked ? (
+                                <Lock className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
+                              ) : isCurrent ? (
+                                <span className="w-2 h-2 rounded-full bg-primary-500 block" aria-hidden="true" />
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-400 tabular-nums w-5 text-center">
+                                  {globalNum}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Title + meta */}
+                            <div className="flex-1 min-w-0">
+                              <p className={cn(
+                                'text-sm font-medium truncate',
+                                isLocked
+                                  ? 'text-slate-400'
+                                  : isCurrent
+                                  ? 'text-primary-800'
+                                  : 'text-slate-700',
+                              )}>
+                                {!isCompleted && (
+                                  <span className="text-slate-300 mr-1 text-xs">{globalNum}.</span>
+                                )}
+                                {mod.title}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <TypeIcon className="w-3 h-3 text-slate-300" aria-hidden="true" />
+                                <span className="text-xs text-slate-400">
+                                  {mod.duration || 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Right arrow for available/current */}
+                            {!isLocked && !isCompleted && (
+                              <ArrowRight
+                                className={cn(
+                                  'w-3.5 h-3.5 flex-shrink-0',
+                                  isCurrent ? 'text-primary-300' : 'text-slate-200',
+                                )}
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

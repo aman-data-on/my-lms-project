@@ -284,30 +284,84 @@ function QuoteBlockView({ data }: { data: any }) {
 }
 
 // ─── 12. Timeline ────────────────────────────────────────────────────
+// Designed for rendering inside VisualPanel's dark (#0E0F12) card.
 function TimelineBlockView({ data }: { data: any }) {
-  const steps = (data.steps || []).filter((s: any) => s.title.trim());
+  const steps = (data.steps || []).filter((s: any) => s.title?.trim());
   if (steps.length === 0) return null;
-  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#06B6D4', '#EC4899'];
+
   return (
-    <div className="relative my-6 pl-8">
-      <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-slate-200" />
-      <div className="space-y-5">
-        {steps.map((step: any, i: number) => {
-          const color = colors[i % colors.length];
-          return (
-            <div key={i} className="relative">
-              <div
-                className="absolute -left-7 top-1 w-4 h-4 rounded-full border-2 border-white shadow"
-                style={{ background: color }}
-              />
-              {step.date && <span className="text-xs font-semibold text-slate-400">{step.date}</span>}
-              <h4 className="font-semibold text-slate-800 text-sm">{step.title}</h4>
-              {step.description && <p className="text-sm text-slate-600 mt-1 leading-relaxed">{step.description}</p>}
-            </div>
-          );
-        })}
+    <>
+      {/* Section header */}
+      <div className="mb-5 pb-3 border-b border-white/[0.12]">
+        <p className="text-[9px] font-mono font-semibold text-[#ED3237] uppercase tracking-[0.18em] mb-1">
+          Company History
+        </p>
+        <h3 className="text-[16px] font-bold text-white leading-snug">
+          Growth Timeline
+        </h3>
       </div>
-    </div>
+
+      {/* Items */}
+      <div className="relative pl-6">
+        {/* Vertical rail */}
+        <div className="absolute left-[5px] top-1 bottom-1 w-px bg-white/[0.15]" />
+
+        <div className="space-y-5">
+          {steps.map((step: any, i: number) => {
+            const isLatest = i === steps.length - 1;
+            const dot = step.color || '#ED3237';
+            return (
+              <div key={i} className="relative">
+                {/* Dot */}
+                <div
+                  className="absolute -left-[19px] top-[5px] w-[14px] h-[14px] rounded-full border-[2.5px] z-10 flex-shrink-0"
+                  style={{
+                    background: dot,
+                    borderColor: '#0E0F12',
+                    boxShadow: isLatest
+                      ? `0 0 12px 4px ${dot}55`
+                      : `0 0 0 1.5px ${dot}40`,
+                  }}
+                />
+
+                {/* Year badge */}
+                {step.date && (
+                  <span
+                    className="inline-flex items-center px-1.5 py-[2px] rounded text-[9px] font-mono font-bold uppercase tracking-[0.12em] border mb-1.5"
+                    style={{
+                      color: dot,
+                      background: `${dot}18`,
+                      borderColor: `${dot}38`,
+                    }}
+                  >
+                    {step.date}
+                  </span>
+                )}
+
+                {/* Icon + title */}
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  {step.icon && (
+                    <span className="text-sm leading-none flex-shrink-0" aria-hidden="true">
+                      {step.icon}
+                    </span>
+                  )}
+                  <h4 className="text-[14px] font-semibold text-white leading-snug">
+                    {step.title}
+                  </h4>
+                </div>
+
+                {/* Description */}
+                {step.description && (
+                  <p className="text-[12px] text-white/80 leading-relaxed mt-0.5">
+                    {step.description}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }
 

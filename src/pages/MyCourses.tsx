@@ -72,7 +72,7 @@ export default function MyCourses({ onNavigate }: { onNavigate: (page: string, d
                     </div>
                   </div>
                   <button
-                    onClick={() => onNavigate('course-detail', { courseId: course.id })}
+                    onClick={() => onNavigate('course-detail', { courseId: course.id, courseTitle: course.title })}
                     className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                       course.status === 'completed'
                         ? 'bg-green-50 text-green-700 hover:bg-green-100'

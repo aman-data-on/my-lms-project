@@ -199,7 +199,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
                   </div>
                 </div>
                 <button
-                  onClick={() => onNavigate('course-detail', { courseId: continueCourse.id })}
+                  onClick={() => onNavigate('course-detail', { courseId: continueCourse.id, courseTitle: continueCourse.title })}
                   className="self-center px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors"
                 >
                   Resume

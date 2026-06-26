@@ -14,6 +14,15 @@ export async function fetchCourse(courseId: string) {
   return data;
 }
 
+export async function fetchAllCourses(): Promise<{ id: string; title: string }[]> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('id, title')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []) as { id: string; title: string }[];
+}
+
 export async function fetchLessons(courseId: string) {
   const { data, error } = await supabase.from('lessons').select('*').eq('course_id', courseId).order('order_index');
   if (error) throw error;

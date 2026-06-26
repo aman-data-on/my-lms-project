@@ -182,7 +182,7 @@ export default function CourseLibrary({ onNavigate }: { onNavigate: (page: strin
                       </button>
                     ) : (
                       <button
-                        onClick={() => onNavigate('course-detail', { courseId: course.id })}
+                        onClick={() => onNavigate('course-detail', { courseId: course.id, courseTitle: course.title })}
                         className="px-4 py-1.5 bg-primary-50 text-primary-700 text-sm font-medium rounded-lg hover:bg-primary-100 transition-colors"
                       >
                         {status === 'Completed' ? 'Review' : isAdmin ? 'Open' : 'Continue'}

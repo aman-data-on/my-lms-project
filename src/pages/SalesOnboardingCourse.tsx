@@ -1,10 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { safeHtml } from '../lib/sanitize';
 import { pushLessonCompletion, markLessonCompleteInProgress } from '../lib/reportData';
 import { CourseAppendix } from '../components/CourseAppendix';
 import { CourseIndex } from '../components/CourseIndex';
+import { LessonWorkspace } from '../components/LessonWorkspace';
+import { ConfettiEffect } from '../components/ConfettiEffect';
 import {
   ChevronLeft, Play, CheckCircle2, Lock, Award,
   BookOpen, Check, ArrowRight, Trophy, XCircle, Timer,
@@ -1221,6 +1224,8 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  // Module-complete celebration: holds the index of the next module to advance to.
+  const [celebration, setCelebration] = useState<{ completedIndex: number; nextIndex: number } | null>(null);
   const [phaseProgress, setPhaseProgress] = useState<PhaseProgress[]>([]);
   const [taskSubmissions, setTaskSubmissions] = useState<TaskSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1359,37 +1364,49 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
     const lesson = lessons[currentLessonIndex];
     if (!lesson) return;
 
-    if (!completedLessons.has(lesson.id)) {
-      await supabase.from('lesson_progress').upsert({
-        user_id: user.id,
-        lesson_id: lesson.id,
-        completed: true,
-        completed_at: new Date().toISOString(),
-      });
-      setCompletedLessons(prev => new Set([...prev, lesson.id]));
-      pushLessonCompletion(user.id, lesson.id, SALES_COURSE_ID, lesson.duration || null);
-      markLessonCompleteInProgress(user.id, SALES_COURSE_ID, lesson.id);
-    }
-
-    // Check if this was the last lesson in the phase
     const phase = PHASES.find(p => p.modules.includes(currentLessonIndex))!;
     const phaseModuleIds = phase.modules.map(idx => lessons[idx]?.id).filter(Boolean);
     const allDone = phaseModuleIds.every(id => completedLessons.has(id) || id === lesson.id);
+    const nextIdx = currentLessonIndex + 1;
 
+    // Decide the UI transition FIRST so a slow/failed DB write can never hide the
+    // celebration. The next module is never shown directly — the learner proceeds
+    // deliberately via the modal's "Proceed to Next Module".
     if (allDone) {
       setView('complete');
-      await supabase.from('phase_progress').update({ status: 'completed' }).eq('user_id', user.id).eq('course_id', SALES_COURSE_ID).eq('phase_number', phase.number);
-      const { data: refreshed } = await supabase.from('phase_progress').select('*').eq('user_id', user.id).eq('course_id', SALES_COURSE_ID);
-      setPhaseProgress(refreshed || []);
-      return;
+    } else if (nextIdx < lessons.length) {
+      setCelebration({ completedIndex: currentLessonIndex, nextIndex: nextIdx });
     }
 
-    // Move to next lesson
-    const nextIdx = currentLessonIndex + 1;
-    if (nextIdx < lessons.length) {
-      setCurrentLessonIndex(nextIdx);
-      setCurrentSlideIndex(0);
+    // Persist progress as best-effort — never let an error block the flow.
+    try {
+      if (!completedLessons.has(lesson.id)) {
+        await supabase.from('lesson_progress').upsert({
+          user_id: user.id,
+          lesson_id: lesson.id,
+          completed: true,
+          completed_at: new Date().toISOString(),
+        });
+        setCompletedLessons(prev => new Set([...prev, lesson.id]));
+        pushLessonCompletion(user.id, lesson.id, SALES_COURSE_ID, lesson.duration || null);
+        markLessonCompleteInProgress(user.id, SALES_COURSE_ID, lesson.id);
+      }
+      if (allDone) {
+        await supabase.from('phase_progress').update({ status: 'completed' }).eq('user_id', user.id).eq('course_id', SALES_COURSE_ID).eq('phase_number', phase.number);
+        const { data: refreshed } = await supabase.from('phase_progress').select('*').eq('user_id', user.id).eq('course_id', SALES_COURSE_ID);
+        setPhaseProgress(refreshed || []);
+      }
+    } catch (err) {
+      console.error('[SalesOnboarding] progress save failed (UI continued):', err);
     }
+  };
+
+  const proceedToNextModule = () => {
+    if (!celebration) return;
+    setCurrentLessonIndex(celebration.nextIndex);
+    setCurrentSlideIndex(0);
+    setCelebration(null);
+    setView('lesson');
   };
 
   // ─── Assessment Logic ─────────────────────────────────────────────
@@ -1766,6 +1783,51 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
   // ─── LESSON VIEW (Slide-based) ──────────────────────────────────────
   if (view === 'lesson' && activePhase !== 5) {
     const currentLesson = lessons[currentLessonIndex];
+
+    // Shared module-complete celebration overlay (blurred, centred). Rendered
+    // alongside whichever reader is active so it overlays the whole page.
+    const celebrationOverlay = celebration ? (
+      <ModuleCompleteCelebration
+        completedTitle={lessons[celebration.completedIndex]?.title || 'this module'}
+        nextTitle={lessons[celebration.nextIndex]?.title || 'Next module'}
+        completedCount={lessons.filter(l => completedLessons.has(l.id)).length}
+        total={lessons.length}
+        onProceed={proceedToNextModule}
+        onClose={() => setCelebration(null)}
+      />
+    ) : null;
+
+    // ── Module 1 (index 0) renders through the new DB-driven structured reader.
+    // Other modules keep their existing slide UX until migrated, module by module.
+    if (currentLessonIndex === 0 && currentLesson && course) {
+      const lastLessonIdx = lessons.length - 1;
+      return (
+        <>
+          <LessonWorkspace
+            lesson={currentLesson}
+            course={course}
+            userId={user?.id || ''}
+            lessonIndex={currentLessonIndex}
+            isCurrentCompleted={completedLessons.has(currentLesson.id)}
+            isLastLesson={currentLessonIndex === lastLessonIdx}
+            isCourseDone={lessons.length > 0 && lessons.every(l => completedLessons.has(l.id))}
+            courseProgressPercent={lessons.length > 0 ? Math.round((lessons.filter(l => completedLessons.has(l.id)).length / lessons.length) * 100) : 0}
+            onBack={() => setView('overview')}
+            onMarkComplete={markCompleteAndContinue}
+            onPrevLesson={() => { if (currentLessonIndex > 0) navigateToLesson(currentLessonIndex - 1); }}
+            onNextLesson={() => {
+              // Always celebrate before showing the next module — never jump directly,
+              // even when the module was already completed (review pass).
+              const n = currentLessonIndex + 1;
+              if (n < lessons.length) setCelebration({ completedIndex: currentLessonIndex, nextIndex: n });
+            }}
+            onAssessment={() => onNavigate('assessments')}
+          />
+          {celebrationOverlay}
+        </>
+      );
+    }
+
     const currentPhaseData = PHASES.find(p => p.modules.includes(currentLessonIndex))!;
     const slide = currentSlides[currentSlideIndex];
     const isLastSlide = currentSlideIndex === currentSlides.length - 1;
@@ -1798,6 +1860,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
     };
 
     return (
+      <>
       <div className="fixed inset-0 flex bg-slate-50">
         {/* Mobile Sidebar Overlay */}
         {mobileSidebarOpen && (
@@ -2106,6 +2169,8 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
           </div>
         </div>
       </div>
+      {celebrationOverlay}
+      </>
     );
   }
 
@@ -2507,6 +2572,75 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
   }
 
   return null;
+}
+
+// ─── Module-complete celebration ────────────────────────────────────
+// Compact confirmation-style dialog (matches the app's standard dialog box):
+// bold title + close (×) header, left-aligned body, footer-right actions.
+// Advances deliberately via "Proceed to Next Module"; close/"Maybe later"
+// dismisses and stays on the current module.
+function ModuleCompleteCelebration({
+  completedTitle, nextTitle, completedCount, total, onProceed, onClose,
+}: {
+  completedTitle: string; nextTitle: string; completedCount: number; total: number;
+  onProceed: () => void; onClose: () => void;
+}) {
+  // Portal to <body> so the dialog is always centred on the full viewport and
+  // escapes the scrollable, sidebar-offset <main> it would otherwise live in.
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="mc-title">
+      {/* Light frosted scrim — no black */}
+      <div className="absolute inset-0 bg-[#221B1D]/25 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
+      {/* Confetti sits BEHIND the card (card is z-[90]) so it never covers the text */}
+      <ConfettiEffect />
+      <div
+        className="relative z-[90] w-full max-w-[440px] rounded-xl bg-white shadow-2xl"
+        style={{ animation: 'mcIn 0.3s cubic-bezier(0.34,1.4,0.64,1) both' }}
+      >
+        <div className="px-6 pt-5 pb-6">
+          {/* Header: title + close */}
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <h2 id="mc-title" className="text-[18px] font-bold text-[#221B1D] leading-tight flex items-center gap-2">
+              <span aria-hidden="true">🎉</span> Happy Learning!
+            </h2>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="flex-shrink-0 -mr-1 -mt-0.5 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237]"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Body */}
+          <p className="text-[14px] text-[#5E555A] leading-relaxed">
+            You've completed <span className="font-semibold text-[#221B1D]">{completedTitle}</span> — that's{' '}
+            <span className="font-semibold text-[#221B1D]">{completedCount} of {total}</span> modules done. Keep up the
+            great work; your next module, <span className="font-semibold text-[#221B1D]">{nextTitle}</span>, is ready
+            when you are.
+          </p>
+
+          {/* Footer action — single button, right aligned (solid red) */}
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={onProceed}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#ED3237] text-white text-[14px] font-semibold hover:bg-[#C5262B] transition-colors shadow-sm shadow-[#ED3237]/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1"
+            >
+              Proceed to Next Module
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </div>
+      <style>{`
+        @keyframes mcIn {
+          from { opacity: 0; transform: translateY(10px) scale(0.97); }
+          to   { opacity: 1; transform: none; }
+        }
+      `}</style>
+    </div>,
+    document.body,
+  );
 }
 
 // ─── Slide Content Components ────────────────────────────────────────

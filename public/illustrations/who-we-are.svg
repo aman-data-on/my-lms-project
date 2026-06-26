@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" role="img" aria-label="Leapswitch cloud infrastructure — cloud connected to servers among city buildings">
+  <defs>
+    <linearGradient id="wwa-bld-a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3E7CB1"/><stop offset="1" stop-color="#2E5E8C"/></linearGradient>
+    <linearGradient id="wwa-bld-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6FB1C9"/><stop offset="1" stop-color="#4E8FAd"/></linearGradient>
+    <linearGradient id="wwa-bld-c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22456A"/><stop offset="1" stop-color="#173451"/></linearGradient>
+    <linearGradient id="wwa-rack" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#244B72"/><stop offset="1" stop-color="#16314C"/></linearGradient>
+  </defs>
+
+  <!-- decorative background clouds -->
+  <g fill="#D7E7F6">
+    <ellipse cx="78" cy="78" rx="34" ry="14"/><ellipse cx="104" cy="72" rx="22" ry="13"/>
+    <ellipse cx="406" cy="92" rx="34" ry="14"/><ellipse cx="382" cy="86" rx="20" ry="12"/>
+  </g>
+
+  <!-- connectors cloud -> racks -->
+  <g stroke="#8FB7DA" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round" fill="none">
+    <path d="M205 150 L205 196"/>
+    <path d="M240 156 L240 196"/>
+    <path d="M275 150 L275 196"/>
+  </g>
+
+  <!-- main cloud -->
+  <path d="M168 150 a38 38 0 0 1 5 -74 a44 44 0 0 1 82 -6 a34 34 0 0 1 11 80 z" fill="#EAF3FC" stroke="#BBD7F0" stroke-width="2.5"/>
+  <!-- red leapswitch "li" mark -->
+  <g fill="#ED3237">
+    <rect x="214" y="84" width="9" height="34" rx="4.5"/>
+    <path d="M236 96 q10 -2 14 6 q-9 5 -14 -1 z"/>
+    <rect x="246" y="92" width="9" height="26" rx="4.5"/>
+    <circle cx="250.5" cy="82" r="5"/>
+  </g>
+
+  <!-- ground -->
+  <rect x="20" y="316" width="440" height="3" rx="1.5" fill="#E3EAF0"/>
+
+  <!-- left city buildings -->
+  <g>
+    <rect x="40" y="214" width="40" height="102" rx="3" fill="url(#wwa-bld-b)"/>
+    <rect x="86" y="180" width="46" height="136" rx="3" fill="url(#wwa-bld-a)"/>
+    <rect x="138" y="238" width="34" height="78" rx="3" fill="url(#wwa-bld-b)"/>
+  </g>
+  <!-- right city buildings -->
+  <g>
+    <rect x="312" y="236" width="34" height="80" rx="3" fill="url(#wwa-bld-b)"/>
+    <rect x="352" y="186" width="46" height="130" rx="3" fill="url(#wwa-bld-a)"/>
+    <rect x="404" y="216" width="38" height="100" rx="3" fill="url(#wwa-bld-b)"/>
+  </g>
+  <!-- building windows -->
+  <g fill="#CFE6F2" opacity="0.85">
+    <g>
+      <rect x="48" y="226" width="7" height="9" rx="1"/><rect x="60" y="226" width="7" height="9" rx="1"/>
+      <rect x="48" y="244" width="7" height="9" rx="1"/><rect x="60" y="244" width="7" height="9" rx="1"/>
+      <rect x="48" y="262" width="7" height="9" rx="1"/><rect x="60" y="262" width="7" height="9" rx="1"/>
+    </g>
+    <g>
+      <rect x="94" y="192" width="8" height="10" rx="1"/><rect x="108" y="192" width="8" height="10" rx="1"/><rect x="120" y="192" width="6" height="10" rx="1"/>
+      <rect x="94" y="212" width="8" height="10" rx="1"/><rect x="108" y="212" width="8" height="10" rx="1"/><rect x="120" y="212" width="6" height="10" rx="1"/>
+      <rect x="94" y="232" width="8" height="10" rx="1"/><rect x="108" y="232" width="8" height="10" rx="1"/><rect x="120" y="232" width="6" height="10" rx="1"/>
+    </g>
+    <g>
+      <rect x="360" y="198" width="8" height="10" rx="1"/><rect x="374" y="198" width="8" height="10" rx="1"/><rect x="386" y="198" width="6" height="10" rx="1"/>
+      <rect x="360" y="218" width="8" height="10" rx="1"/><rect x="374" y="218" width="8" height="10" rx="1"/><rect x="386" y="218" width="6" height="10" rx="1"/>
+      <rect x="360" y="238" width="8" height="10" rx="1"/><rect x="374" y="238" width="8" height="10" rx="1"/><rect x="386" y="238" width="6" height="10" rx="1"/>
+    </g>
+  </g>
+
+  <!-- server racks (center) -->
+  <g>
+    <rect x="192" y="196" width="30" height="120" rx="5" fill="url(#wwa-rack)"/>
+    <rect x="225" y="196" width="30" height="120" rx="5" fill="url(#wwa-rack)"/>
+    <rect x="258" y="196" width="30" height="120" rx="5" fill="url(#wwa-rack)"/>
+  </g>
+  <!-- rack lights -->
+  <g>
+    <g fill="#4FD1C5">
+      <rect x="197" y="206" width="6" height="6" rx="1"/><rect x="207" y="206" width="6" height="6" rx="1"/>
+      <rect x="230" y="206" width="6" height="6" rx="1"/><rect x="240" y="206" width="6" height="6" rx="1"/>
+      <rect x="263" y="206" width="6" height="6" rx="1"/><rect x="273" y="206" width="6" height="6" rx="1"/>
+      <rect x="197" y="240" width="6" height="6" rx="1"/><rect x="230" y="240" width="6" height="6" rx="1"/><rect x="263" y="240" width="6" height="6" rx="1"/>
+    </g>
+    <g fill="#F2B032">
+      <rect x="207" y="223" width="6" height="6" rx="1"/><rect x="240" y="223" width="6" height="6" rx="1"/><rect x="273" y="223" width="6" height="6" rx="1"/>
+      <rect x="197" y="257" width="6" height="6" rx="1"/><rect x="230" y="257" width="6" height="6" rx="1"/><rect x="263" y="257" width="6" height="6" rx="1"/>
+    </g>
+    <g fill="#ED3237">
+      <rect x="207" y="274" width="6" height="6" rx="1"/><rect x="240" y="274" width="6" height="6" rx="1"/><rect x="273" y="274" width="6" height="6" rx="1"/>
+    </g>
+  </g>
+
+  <!-- trees -->
+  <g>
+    <g transform="translate(178 296)"><rect x="-2" y="6" width="4" height="14" rx="2" fill="#7A5A3A"/><circle cx="0" cy="0" r="12" fill="#2E8B6B"/><circle cx="-6" cy="6" r="9" fill="#3BA776"/><circle cx="6" cy="6" r="9" fill="#3BA776"/></g>
+    <g transform="translate(300 300)"><rect x="-2" y="6" width="4" height="12" rx="2" fill="#7A5A3A"/><circle cx="0" cy="0" r="10" fill="#2E8B6B"/><circle cx="-5" cy="5" r="8" fill="#3BA776"/><circle cx="5" cy="5" r="8" fill="#3BA776"/></g>
+    <g transform="translate(28 302)"><rect x="-2" y="5" width="4" height="12" rx="2" fill="#7A5A3A"/><circle cx="0" cy="0" r="9" fill="#3BA776"/></g>
+    <g transform="translate(454 304)"><rect x="-2" y="5" width="4" height="11" rx="2" fill="#7A5A3A"/><circle cx="0" cy="0" r="9" fill="#3BA776"/></g>
+  </g>
+</svg>
