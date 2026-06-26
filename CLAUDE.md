@@ -43,6 +43,22 @@ npx supabase db push    # apply new SQL migrations to the remote DB
 7. **Commit only when asked.** End commit messages with the Co-Authored-By
    trailer. `git remote origin` is stored token-free.
 
+## Premium design principles (Phase 1 — apply to every lesson screen)
+
+Target: enterprise-grade LMS (Coursera / LinkedIn Learning / MS Learn) where every
+screen feels complete even when source content is minimal.
+- **No dead space.** Tight, consistent rhythm (one spacing scale); no oversized top/
+  bottom padding, no large inter-section gaps, no near-empty cards.
+- **Visually complete.** Short lessons get a relevant visual (diagram / timeline /
+  comparison / illustration / key-facts) — auto-chosen from content, never decorative.
+- **Equal cards.** Cards in a row share width AND height; a shorter card fills via
+  internal layout (distribute/centre content), never by empty stretch. `VisualShell`
+  is `flex flex-col` with a `flex-1` body so stretched cards can fill.
+- **One icon system** (`blocks/icons.tsx`, lucide; never emoji), consistent radius/
+  shadow/padding, brand red accent, readable measure (`max-w-[70ch]` prose).
+- **Content-aware layout** per topic (diagram beside text, diagram+cards row, etc.) —
+  not one template for all. Facts come only from source (see content rule).
+
 ## Key code locations
 
 | Area | Path |

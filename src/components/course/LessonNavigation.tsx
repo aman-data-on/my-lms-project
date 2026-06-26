@@ -12,6 +12,7 @@ export function LessonNavigation({
   nextLabel,
   upNextTitle,
   busy,
+  sticky = false,
 }: {
   onPrev: () => void;
   onNext: () => void;
@@ -19,9 +20,14 @@ export function LessonNavigation({
   nextLabel: string;
   upNextTitle?: string | null;
   busy?: boolean;
+  /** When true, render compact (no top margin/border) for use in a sticky footer bar. */
+  sticky?: boolean;
 }) {
   return (
-    <div className="mt-10 pt-6 border-t border-[#E6E5E0] flex flex-col sm:flex-row sm:items-center gap-4">
+    <div className={sticky
+      ? 'flex flex-row items-center gap-3'
+      : 'mt-10 pt-6 border-t border-[#E6E5E0] flex flex-col sm:flex-row sm:items-center gap-4'}
+    >
       <button
         onClick={onPrev}
         disabled={prevDisabled}

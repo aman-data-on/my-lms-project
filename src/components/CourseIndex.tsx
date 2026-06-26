@@ -4,6 +4,7 @@ import {
   BookOpen, Play, FileText, ArrowRight,
 } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { tidyTitle, parseDurationMinutes, formatMinutes } from '../lib/utils';
 
 export interface IndexPhase {
   number: number;
@@ -112,6 +113,8 @@ export function CourseIndex({
           const completedMods = phase.modules.filter(m =>
             getModuleStatus(m, m.lessonIndex) === 'completed',
           ).length;
+          const phaseMinutes = phase.modules.reduce((acc, m) => acc + parseDurationMinutes(m.duration), 0);
+          const phaseTime = formatMinutes(phaseMinutes);
 
           const isCurrentPhase = phaseStatus === 'in_progress';
           const isCompletePhase = phaseStatus === 'completed';
@@ -126,14 +129,15 @@ export function CourseIndex({
                   : isCompletePhase
                   ? 'border-green-100'
                   : 'border-slate-200',
-                !unlocked && 'opacity-75',
+                !unlocked && 'opacity-60',
               )}
             >
               {/* Phase trigger */}
               <button
                 id={triggerId}
-                onClick={() => togglePhase(phase.number)}
-                aria-expanded={isOpen}
+                onClick={() => { if (unlocked) togglePhase(phase.number); }}
+                aria-expanded={unlocked ? isOpen : undefined}
+                aria-disabled={!unlocked || undefined}
                 aria-controls={panelId}
                 className={cn(
                   'w-full flex items-center gap-3 px-5 py-4 text-left min-h-[64px] transition-colors',
@@ -168,7 +172,7 @@ export function CourseIndex({
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
                     {unlocked ? (
-                      `${completedMods} of ${totalMods} lessons completed`
+                      `${completedMods} of ${totalMods} lessons completed${phaseTime ? ` · ${phaseTime}` : ''}`
                     ) : (
                       <span className="flex items-center gap-1">
                         <Lock className="w-3 h-3" aria-hidden="true" />
@@ -192,16 +196,17 @@ export function CourseIndex({
                       In progress
                     </span>
                   )}
-                  {!unlocked && (
-                    <Lock className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
+                  {!unlocked ? (
+                    <Lock className="w-4 h-4 text-slate-300" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown
+                      className={cn(
+                        'w-4 h-4 text-slate-400 transition-transform duration-200',
+                        isOpen && 'rotate-180',
+                      )}
+                      aria-hidden="true"
+                    />
                   )}
-                  <ChevronDown
-                    className={cn(
-                      'w-4 h-4 text-slate-400 transition-transform duration-200',
-                      isOpen && 'rotate-180',
-                    )}
-                    aria-hidden="true"
-                  />
                 </div>
               </button>
 
@@ -283,7 +288,7 @@ export function CourseIndex({
                                 {!isCompleted && (
                                   <span className="text-slate-300 mr-1 text-xs">{globalNum}.</span>
                                 )}
-                                {mod.title}
+                                {tidyTitle(mod.title)}
                               </p>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <TypeIcon className="w-3 h-3 text-slate-300" aria-hidden="true" />

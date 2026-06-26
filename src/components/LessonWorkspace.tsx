@@ -251,20 +251,31 @@ function TopicPage({
   // space: an explicit illustration image, else a compact diagram (only when
   // it's not being paired below), else an inferred illustration. When a pair
   // exists, the diagram goes into the row and the intro stays prose-only.
-  const sideIndex = hasPair ? -1 : diagramIdx;
-  const sideVisual = sideIndex >= 0 ? topic.visuals[sideIndex] : null;
-  const introRight: ReactNode = topic.illustrationSrc
-    ? <TopicIllustration src={topic.illustrationSrc} title={topic.title} text={topic.leadHtml} />
-    : sideVisual
-    ? renderVisual(sideVisual, 'side')
-    : (!hasPair && hasProse)
-    ? <TopicIllustration title={topic.title} text={topic.leadHtml} />
-    : null;
+  // A short lead beside a tall diagram leaves dead space under the text, so a
+  // diagram only sits BESIDE the prose when the lead is long enough to balance
+  // it; otherwise it renders full-width below a readable lead.
+  const proseWords = topic.leadHtml.replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+  const sideDiagramIdx = hasPair ? -1 : diagramIdx;
+  const placeDiagramBeside = sideDiagramIdx >= 0 && proseWords >= 80;
+
+  let introRight: ReactNode = null;
+  let introIsIllustration = false;
+  let sideConsumed = -1;
+  if (topic.illustrationSrc) {
+    introRight = <TopicIllustration src={topic.illustrationSrc} title={topic.title} text={topic.leadHtml} />;
+    introIsIllustration = true;
+  } else if (placeDiagramBeside) {
+    introRight = renderVisual(topic.visuals[sideDiagramIdx], 'side');
+    sideConsumed = sideDiagramIdx;
+  } else if (sideDiagramIdx < 0 && !hasPair && hasProse) {
+    introRight = <TopicIllustration title={topic.title} text={topic.leadHtml} />;
+    introIsIllustration = true;
+  }
 
   // Content flow below the intro: the paired row at the diagram's position, then
-  // everything else full-width (skipping anything already shown).
+  // everything else full-width (skipping anything already shown in the intro).
   const skip = new Set<number>();
-  if (sideVisual) skip.add(sideIndex);
+  if (sideConsumed >= 0) skip.add(sideConsumed);
   if (hasPair) skip.add(pairCardIdx);
   const content: ReactNode[] = [];
   topic.visuals.forEach((v, i) => {
@@ -289,7 +300,7 @@ function TopicPage({
   // header above the content rather than a narrow column beside dead space.
   const intro = (
     <div>
-      <ProseBlock html={topic.leadHtml} widthClass={introRight ? 'max-w-[70ch]' : 'max-w-none'} />
+      <ProseBlock html={topic.leadHtml} widthClass={introRight ? 'max-w-[70ch]' : 'max-w-[78ch]'} />
       {topic.objective && (
         <div className="mt-6">
           <LearningObjectiveCallout text={topic.objective} />
@@ -307,11 +318,14 @@ function TopicPage({
       />
 
       {/* One rhythm scale for the whole page — uniform section gaps, no ad-hoc margins. */}
-      <div className="mt-8 lg:mt-10 space-y-8 lg:space-y-10">
+      <div className="mt-6 lg:mt-8 space-y-8 lg:space-y-10">
         {introRight ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 items-start">
             {intro}
-            <div className="w-full">{introRight}</div>
+            {/* Illustration is sized to roughly match the intro text height and
+                top-aligned, so it sits beside the prose without pushing it down
+                or leaving a gap below "Your goal". */}
+            <div className={introIsIllustration ? 'w-full lg:max-w-[400px] lg:justify-self-center' : 'w-full'}>{introRight}</div>
           </div>
         ) : (
           intro
@@ -332,28 +346,56 @@ function ModuleOverview({
 }: {
   moduleNumber: number; moduleTitle: string; summary: string | null; topics: Topic[]; onSelectTopic: (i: number) => void;
 }) {
+  // Estimated time: ~200 wpm of lead prose + a small allowance per visual block.
+  const words = topics.reduce(
+    (a, t) => a + t.leadHtml.replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length + t.visuals.length * 40,
+    0,
+  );
+  const readMins = Math.max(1, Math.round(words / 200));
   return (
     <div>
-      <LessonHeader
-        breadcrumbs={[`Module ${moduleNumber}`, moduleTitle]}
-        category="Module overview"
-        title={moduleTitle}
-        lead={summary || undefined}
-      />
+      {/* Hero — summary, meta and primary CTA beside a relevant illustration so
+          the landing reads as a complete, intentional page (not a short list). */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+        <div>
+          <LessonHeader
+            breadcrumbs={[`Module ${moduleNumber}`, moduleTitle]}
+            category="Module overview"
+            title={moduleTitle}
+            lead={summary || undefined}
+          />
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-[#6B6E76]">
+            <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#ED3237]" aria-hidden="true" />{topics.length} topics</span>
+            <span aria-hidden="true">·</span>
+            <span>~{readMins} min</span>
+          </div>
+          <button
+            onClick={() => onSelectTopic(0)}
+            aria-label={topics[0]?.title ? `Start lesson: ${topics[0].label} ${topics[0].title}` : 'Start lesson'}
+            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-[14px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-2"
+            style={{ background: '#ED3237', boxShadow: '0 1px 6px rgba(237,50,55,0.25)' }}
+          >
+            Start lesson →
+          </button>
+        </div>
+        <div className="w-full lg:max-w-[460px] lg:justify-self-center">
+          <TopicIllustration title={moduleTitle} text={summary || ''} />
+        </div>
+      </div>
 
       <section className="mt-10 lg:mt-12">
         <div className="flex items-baseline justify-between mb-4">
           <h2 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[#6B6E76]">
             Topics in this module
           </h2>
-          <span className="text-[12px] text-[#938890] tabular-nums">{topics.length} topics</span>
+          <span className="text-[12px] text-[#938890] tabular-nums">{topics.length} topics · ~{readMins} min</span>
         </div>
         <ol className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {topics.map((topic, i) => (
             <li key={topic.id}>
               <button
                 onClick={() => onSelectTopic(i)}
-                className="group h-full w-full text-left flex items-start gap-3.5 rounded-xl border border-[#E6E5E0] bg-white hover:border-[#F1C9CB] hover:bg-[#FFFBFB] transition-colors px-4 py-4"
+                className="group h-full w-full text-left flex items-start gap-3.5 rounded-xl border border-[#E6E5E0] bg-white hover:border-[#F1C9CB] hover:bg-[#FFFBFB] transition-colors px-4 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1"
               >
                 <span className="flex-shrink-0 mt-0.5 w-9 h-9 rounded-lg bg-[#FFF1F0] text-[#ED3237] text-[13px] font-bold flex items-center justify-center tabular-nums">
                   {topic.label}
@@ -370,16 +412,6 @@ function ModuleOverview({
           ))}
         </ol>
       </section>
-
-      <div className="mt-10">
-        <button
-          onClick={() => onSelectTopic(0)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-[14px] font-semibold transition-colors"
-          style={{ background: '#ED3237', boxShadow: '0 1px 6px rgba(237,50,55,0.25)' }}
-        >
-          Start lesson →
-        </button>
-      </div>
     </div>
   );
 }
@@ -459,12 +491,6 @@ export function LessonWorkspace({
     ? (isCourseDone ? 'Take Assessment' : 'Next Module')
     : 'Complete & Continue';
 
-  const upNextTitle = isOverview
-    ? topics[0]?.title
-    : !isLastTopic
-    ? topics[active + 1]?.title
-    : (isCurrentCompleted && !isCourseDone ? 'Next module' : null);
-
   const prevDisabled = isOverview && lessonIndex === 0;
 
   const sidebar = (
@@ -509,7 +535,7 @@ export function LessonWorkspace({
         <CourseTopBar courseTitle={course.title} overallPercent={overallPercent} onMenu={() => setSidebarOpen(true)} />
 
         <div id="lesson-scroll" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto w-full max-w-[1320px] min-w-0 px-5 sm:px-8 lg:px-14 py-8 lg:py-12">
+          <div className="mx-auto w-full max-w-[1560px] min-w-0 px-5 sm:px-8 lg:px-14 pt-6 lg:pt-8 pb-10 lg:pb-12">
             {isOverview ? (
               <ModuleOverview
                 moduleNumber={moduleNumber}
@@ -525,17 +551,25 @@ export function LessonWorkspace({
                 moduleTitle={moduleTitle}
               />
             )}
-
-            <LessonNavigation
-              onPrev={handlePrev}
-              onNext={handleNext}
-              prevDisabled={prevDisabled}
-              nextLabel={nextLabel}
-              upNextTitle={upNextTitle}
-              busy={completing}
-            />
           </div>
         </div>
+
+        {/* Sticky lesson nav — always reachable without scrolling (topic pages
+            only; the overview has its own "Start lesson" CTA). */}
+        {!isOverview && (
+          <div className="flex-shrink-0 border-t border-[#E6E5E0] bg-white/95 backdrop-blur">
+            <div className="mx-auto w-full max-w-[1560px] px-5 sm:px-8 lg:px-14 py-3">
+              <LessonNavigation
+                onPrev={handlePrev}
+                onNext={handleNext}
+                prevDisabled={prevDisabled}
+                nextLabel={nextLabel}
+                busy={completing}
+                sticky
+              />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

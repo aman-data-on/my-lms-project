@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { safeHtml } from '../lib/sanitize';
+import { tidyTitle } from '../lib/utils';
 import { pushLessonCompletion, markLessonCompleteInProgress } from '../lib/reportData';
 import { CourseAppendix } from '../components/CourseAppendix';
 import { CourseIndex } from '../components/CourseIndex';
@@ -1583,7 +1584,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="w-8 h-8 border-4 border-cyan-200 border-t-cyan-600 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -1648,7 +1649,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
             <div className="w-full bg-white/20 rounded-full h-1.5">
               <div
                 aria-hidden="true"
-                className="bg-cyan-400 rounded-full h-1.5 transition-all duration-500 motion-reduce:transition-none"
+                className="bg-white rounded-full h-1.5 transition-all duration-500 motion-reduce:transition-none"
                 style={{ width: `${getOverallProgress()}%` }}
               />
             </div>
@@ -1896,7 +1897,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                   <button
                     onClick={() => togglePhaseCollapse(phase.number)}
                     className={`w-full flex items-center gap-2 px-4 py-2 text-left transition-colors ${
-                      isCurrentPhase ? 'bg-cyan-50' : 'hover:bg-slate-50'
+                      isCurrentPhase ? 'bg-primary-50' : 'hover:bg-slate-50'
                     }`}
                   >
                     <span
@@ -1954,13 +1955,13 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                           >
                             {/* Type Icon */}
                             <Icon className={`w-4 h-4 flex-shrink-0 ${
-                              isLocked ? 'text-slate-300' : isActive ? 'text-cyan-600' : 'text-slate-400'
+                              isLocked ? 'text-slate-300' : isActive ? 'text-primary-600' : 'text-slate-400'
                             }`} />
 
                             {/* Module Info */}
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm leading-tight line-clamp-2 ${
-                                isLocked ? 'text-slate-400' : isActive ? 'text-cyan-800 font-medium' : 'text-slate-700'
+                                isLocked ? 'text-slate-400' : isActive ? 'text-primary-800 font-medium' : 'text-slate-700'
                               }`}>
                                 {modLesson.title.replace(/^Module \d+ — /, '')}
                               </p>
@@ -2037,7 +2038,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                   cx="20"
                   cy="20"
                   r="16"
-                  className="stroke-cyan-500"
+                  className="stroke-primary-500"
                   strokeWidth="3"
                   fill="none"
                   strokeDasharray={`${2 * Math.PI * 16 * (completedModulesTotal / lessons.length)} ${2 * Math.PI * 16}`}
@@ -2083,7 +2084,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
             {/* Center — lesson title, always centred */}
             <div className="flex-1 flex justify-center min-w-0 px-2">
               <h1 className="font-bold text-slate-800 truncate text-sm sm:text-base text-center">
-                {currentLesson?.title}
+                {currentLesson?.title ? tidyTitle(currentLesson.title) : ''}
               </h1>
             </div>
 
@@ -2135,7 +2136,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                       key={idx}
                       onClick={() => setCurrentSlideIndex(idx)}
                       className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                        idx === currentSlideIndex ? 'bg-cyan-500' : 'bg-slate-200 hover:bg-slate-300'
+                        idx === currentSlideIndex ? 'bg-primary-500' : 'bg-slate-200 hover:bg-slate-300'
                       }`}
                     />
                   ))}
@@ -2152,14 +2153,14 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
               {!isLastSlide ? (
                 <button
                   onClick={() => setCurrentSlideIndex(currentSlideIndex + 1)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
                 >
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
               ) : (
                 <button
                   onClick={markCompleteAndContinue}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
                 >
                   <Check className="w-4 h-4" />
                   Mark Complete & Continue
@@ -2180,7 +2181,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
 
     return (
       <div className="space-y-6">
-        <button onClick={() => setView('overview')} className="flex items-center gap-1 text-sm text-cyan-600 hover:text-cyan-800 font-medium">
+        <button onClick={() => setView('overview')} className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800 font-medium">
           <ChevronLeft className="w-4 h-4" /> Back to Phases
         </button>
 
@@ -2225,13 +2226,13 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                 value={shadowCallsContent}
                 onChange={(e) => setShadowCallsContent(e.target.value)}
                 rows={8}
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none text-sm mb-3"
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm mb-3"
                 placeholder="Enter your shadow call observations here..."
               />
               <button
                 onClick={() => submitTask('shadow_calls', shadowCallsContent)}
                 disabled={!shadowCallsContent.trim()}
-                className="px-5 py-2.5 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 disabled:opacity-50"
+                className="px-5 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50"
               >
                 Submit Log
               </button>
@@ -2277,13 +2278,13 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                 value={mockSalesContent}
                 onChange={(e) => setMockSalesContent(e.target.value)}
                 rows={8}
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none text-sm mb-3"
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm mb-3"
                 placeholder="Enter your mock sales flow here..."
               />
               <button
                 onClick={() => submitTask('mock_sales_flow', mockSalesContent)}
                 disabled={!mockSalesContent.trim()}
-                className="px-5 py-2.5 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 disabled:opacity-50"
+                className="px-5 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50"
               >
                 Submit Mock Sales Flow
               </button>
@@ -2310,7 +2311,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                 <CheckCircle2 className="w-3 h-3" /> Completed
               </span>
             ) : (
-              <span className="ml-auto px-2.5 py-1 bg-cyan-50 text-cyan-700 text-xs font-medium rounded-full flex items-center gap-1">
+              <span className="ml-auto px-2.5 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full flex items-center gap-1">
                 <Play className="w-3 h-3" /> Required
               </span>
             )}
@@ -2318,7 +2319,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
           {!hasTaskSubmission('final_assessment') ? (
             <button
               onClick={() => startPhaseAssessment(5)}
-              className="px-5 py-2.5 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 flex items-center gap-2"
+              className="px-5 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 flex items-center gap-2"
             >
               <Play className="w-4 h-4" /> Start Final Assessment
             </button>
@@ -2358,7 +2359,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
 
           <button
             onClick={() => startPhaseAssessment(activePhase)}
-            className="px-6 py-3 bg-cyan-600 text-white font-medium rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2 mx-auto"
+            className="px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 mx-auto"
           >
             <ClipboardCheck className="w-5 h-5" /> Take Phase {activePhase} Assessment
           </button>
@@ -2374,7 +2375,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <button onClick={() => setView('overview')} className="text-sm text-cyan-600 hover:text-cyan-800 mb-2 flex items-center gap-1">
+            <button onClick={() => setView('overview')} className="text-sm text-primary-600 hover:text-primary-800 mb-2 flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" /> Exit Assessment
             </button>
             <h2 className="text-xl font-bold text-slate-800">{takingAssessment.title}</h2>
@@ -2390,15 +2391,15 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
               <div className="flex items-center gap-2 mb-4">
-                <span className="px-2 py-0.5 bg-cyan-50 text-cyan-700 text-xs font-medium rounded-full">Q{currentQuestionIndex + 1}</span>
+                <span className="px-2 py-0.5 bg-primary-50 text-primary-700 text-xs font-medium rounded-full">Q{currentQuestionIndex + 1}</span>
               </div>
               <p className="text-slate-800 font-medium mb-4">{currentQ.question_text}</p>
 
               {currentQ.type === 'multiple_choice' && (
                 <div className="space-y-2">
                   {currentQ.options?.map((opt: string, oi: number) => (
-                    <label key={oi} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${answers[currentQ.id] === opt ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                      <input type="radio" name={`q-${currentQ.id}`} checked={answers[currentQ.id] === opt} onChange={() => setAnswers({ ...answers, [currentQ.id]: opt })} className="w-4 h-4 text-cyan-600" />
+                    <label key={oi} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${answers[currentQ.id] === opt ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                      <input type="radio" name={`q-${currentQ.id}`} checked={answers[currentQ.id] === opt} onChange={() => setAnswers({ ...answers, [currentQ.id]: opt })} className="w-4 h-4 text-primary-600" />
                       <span className="text-sm text-slate-700">{opt}</span>
                     </label>
                   ))}
@@ -2408,8 +2409,8 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
               {currentQ.type === 'true_false' && (
                 <div className="flex gap-3">
                   {['True', 'False'].map(opt => (
-                    <label key={opt} className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${answers[currentQ.id] === opt.toLowerCase() ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                      <input type="radio" name={`q-${currentQ.id}`} checked={answers[currentQ.id] === opt.toLowerCase()} onChange={() => setAnswers({ ...answers, [currentQ.id]: opt.toLowerCase() })} className="w-4 h-4 text-cyan-600" />
+                    <label key={opt} className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${answers[currentQ.id] === opt.toLowerCase() ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                      <input type="radio" name={`q-${currentQ.id}`} checked={answers[currentQ.id] === opt.toLowerCase()} onChange={() => setAnswers({ ...answers, [currentQ.id]: opt.toLowerCase() })} className="w-4 h-4 text-primary-600" />
                       <span className="text-sm font-medium text-slate-700">{opt}</span>
                     </label>
                   ))}
@@ -2417,7 +2418,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
               )}
 
               {currentQ.type === 'fill_blank' && (
-                <input type="text" value={answers[currentQ.id] || ''} onChange={(e) => setAnswers({ ...answers, [currentQ.id]: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none text-sm" placeholder="Your answer" />
+                <input type="text" value={answers[currentQ.id] || ''} onChange={(e) => setAnswers({ ...answers, [currentQ.id]: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" placeholder="Your answer" />
               )}
 
               {currentQ.type === 'matching' && (
@@ -2426,7 +2427,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                     <div key={pi} className="flex items-center gap-3">
                       <span className="flex-1 p-2 bg-slate-50 rounded-lg text-sm text-slate-700">{pair.left}</span>
                       <ArrowRight className="w-4 h-4 text-slate-400" />
-                      <select value={answers[currentQ.id]?.[pi] || ''} onChange={(e) => setAnswers({ ...answers, [currentQ.id]: { ...answers[currentQ.id], [pi]: e.target.value } })} className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 outline-none bg-white">
+                      <select value={answers[currentQ.id]?.[pi] || ''} onChange={(e) => setAnswers({ ...answers, [currentQ.id]: { ...answers[currentQ.id], [pi]: e.target.value } })} className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
                         <option value="">Select match...</option>
                         {currentQ.matching_pairs.map((p: any, i: number) => <option key={i} value={p.right}>{p.right}</option>)}
                       </select>
@@ -2436,7 +2437,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
               )}
 
               {(currentQ.type === 'short_answer' || currentQ.type === 'long_answer') && (
-                <textarea value={answers[currentQ.id] || ''} onChange={(e) => setAnswers({ ...answers, [currentQ.id]: e.target.value })} rows={currentQ.type === 'long_answer' ? 6 : 3} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none text-sm" placeholder="Type your answer here..." />
+                <textarea value={answers[currentQ.id] || ''} onChange={(e) => setAnswers({ ...answers, [currentQ.id]: e.target.value })} rows={currentQ.type === 'long_answer' ? 6 : 3} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" placeholder="Type your answer here..." />
               )}
             </div>
 
@@ -2445,7 +2446,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                 Previous
               </button>
               {currentQuestionIndex < takingQuestions.length - 1 ? (
-                <button onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)} className="px-5 py-2.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 flex items-center gap-2">
+                <button onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)} className="px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2">
                   Next <ArrowRight className="w-4 h-4" />
                 </button>
               ) : (
@@ -2473,7 +2474,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
 
           <div className="flex items-center justify-center gap-8 mb-8">
             <div className="text-center">
-              <p className="text-3xl font-bold text-cyan-700">{result.score}%</p>
+              <p className="text-3xl font-bold text-primary-700">{result.score}%</p>
               <p className="text-sm text-slate-500">Your Score</p>
             </div>
             <div className="w-px h-12 bg-slate-200" />
@@ -2512,7 +2513,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                     setView('overview');
                   }
                 }}
-                className="px-6 py-2.5 bg-cyan-600 text-white font-medium rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2"
+                className="px-6 py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
               >
                 {activePhase < 5 ? (
                   <>Continue to Phase {activePhase + 1} <ArrowRight className="w-4 h-4" /></>
@@ -2527,7 +2528,7 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
                   setResult(null);
                   setView('complete');
                 }}
-                className="px-6 py-2.5 bg-cyan-600 text-white font-medium rounded-lg hover:bg-cyan-700 transition-colors"
+                className="px-6 py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
               >
                 Retake Assessment
               </button>
@@ -2552,14 +2553,14 @@ export default function SalesOnboardingCourse({ onNavigate }: { onNavigate: (pag
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Sales Onboarding Complete!</h2>
           <p className="text-slate-500 mb-6">You have successfully completed the Sales Onboarding Training Programme.</p>
 
-          <div className="bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl p-8 mb-6 border-2 border-cyan-200">
-            <div className="text-sm text-cyan-600 font-medium mb-2">CERTIFICATE OF COMPLETION</div>
-            <h3 className="text-xl font-bold text-cyan-800 mb-4">Sales Onboarding Certification — Leapswitch & CloudPe</h3>
+          <div className="bg-gradient-to-br from-primary-50 to-teal-50 rounded-xl p-8 mb-6 border-2 border-primary-200">
+            <div className="text-sm text-primary-600 font-medium mb-2">CERTIFICATE OF COMPLETION</div>
+            <h3 className="text-xl font-bold text-primary-800 mb-4">Sales Onboarding Certification — Leapswitch & CloudPe</h3>
             <div className="text-slate-600 text-sm">This certifies that the bearer has completed all required training modules, assessments, and field readiness tasks.</div>
           </div>
 
           <div className="flex justify-center gap-3">
-            <button onClick={() => onNavigate('certificates')} className="px-6 py-2.5 bg-cyan-600 text-white font-medium rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2">
+            <button onClick={() => onNavigate('certificates')} className="px-6 py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
               <Download className="w-4 h-4" /> View in Certificates
             </button>
             <button onClick={() => setView('overview')} className="px-6 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors">
@@ -2648,11 +2649,11 @@ function SlideLeftContent({ slide }: { slide: Slide }) {
   return (
     <div className="flex-1">
       {slide.leftContent.label && (
-        <span className="text-xs font-bold uppercase tracking-wider text-cyan-600 mb-2 block">
+        <span className="text-xs font-bold uppercase tracking-wider text-primary-600 mb-2 block">
           {slide.leftContent.label}
         </span>
       )}
-      <h2 className="text-2xl font-bold text-slate-800 mb-4">{slide.leftContent.title}</h2>
+      <h2 className="text-2xl font-bold text-slate-800 mb-4">{tidyTitle(slide.leftContent.title)}</h2>
 
       {slide.leftContent.subtitle && (
         <p className="text-lg font-medium text-slate-700 mb-4">{slide.leftContent.subtitle}</p>
@@ -2668,9 +2669,9 @@ function SlideLeftContent({ slide }: { slide: Slide }) {
       )}
 
       {slide.leftContent.callout && (
-        <div className="mt-4 bg-cyan-50 border-l-4 border-cyan-500 rounded-r-lg p-4">
-          <span className="text-xs font-bold text-cyan-700">{slide.leftContent.callout.label}</span>
-          <p className="text-sm text-cyan-800 mt-1">{slide.leftContent.callout.text}</p>
+        <div className="mt-4 bg-primary-50 border-l-4 border-primary-500 rounded-r-lg p-4">
+          <span className="text-xs font-bold text-primary-700">{slide.leftContent.callout.label}</span>
+          <p className="text-sm text-primary-800 mt-1">{slide.leftContent.callout.text}</p>
         </div>
       )}
     </div>
@@ -2686,7 +2687,7 @@ function SlideRightContent({ slide }: { slide: Slide }) {
           <ul className="space-y-3">
             {slide.rightContent.items?.map((item, i) => (
               <li key={i} className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-cyan-600 mt-0.5 flex-shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-primary-600 mt-0.5 flex-shrink-0" />
                 <span className="text-sm text-slate-700">{item}</span>
               </li>
             ))}
@@ -2703,7 +2704,7 @@ function SlideRightContent({ slide }: { slide: Slide }) {
                 {item.includes('—') || item.includes(':') ? (
                   <span className="text-sm text-slate-700">{item}</span>
                 ) : (
-                  <div className="w-2 h-2 rounded-full bg-cyan-500 flex-shrink-0" />
+                  <div className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
                 )}
                 {!item.includes('—') && !item.includes(':') && (
                   <span className="text-sm text-slate-700">{item}</span>

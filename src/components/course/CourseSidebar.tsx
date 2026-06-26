@@ -107,7 +107,7 @@ export function CourseSidebar({
             <Trophy className="w-5 h-5" />
           </span>
           <p className="text-[12px] leading-snug mt-2.5" style={{ color: TXT_DIM }}>
-            {pct >= 100 ? 'Module complete — well done!' : 'Complete all lessons to unlock the module'}
+            {pct >= 100 ? 'Module complete — well done!' : 'Complete all topics to finish this module'}
           </p>
           <div className="mt-3 flex items-center gap-2.5">
             <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: TRACK }}>
@@ -131,7 +131,7 @@ function SidebarItem({
     <button
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className="group relative w-full flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2.5 text-left transition-colors"
+      className="group relative w-full flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-inset"
       style={{ background: active ? BG_ACTIVE : 'transparent' }}
       onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.035)'; }}
       onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}

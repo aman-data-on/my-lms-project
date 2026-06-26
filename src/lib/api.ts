@@ -280,9 +280,26 @@ export async function fetchDashboardData(userId: string) {
     department: continueCourseRecord.courses[0]?.department,
     thumbnail_url: continueCourseRecord.courses[0]?.thumbnail_url,
     duration: continueCourseRecord.courses[0]?.duration,
-    progress_percent: continueCourseRecord.progress_percent,
+    progress_percent: continueCourseRecord.progress_percent ?? 0,
     status: continueCourseRecord.status,
   } : null;
+
+  // Compute the continue-course progress from ACTUAL lesson completion so the
+  // dashboard matches the course page (the stored enrollments.progress_percent
+  // can be stale / 0). Single source of truth = completed lessons / total.
+  if (continueCourse?.id) {
+    const { data: courseLessons } = await supabase.from('lessons').select('id').eq('course_id', continueCourse.id);
+    const lessonIds = (courseLessons || []).map((l: any) => l.id);
+    if (lessonIds.length > 0) {
+      const { data: doneRows } = await supabase
+        .from('lesson_progress')
+        .select('lesson_id')
+        .eq('user_id', userId)
+        .eq('completed', true)
+        .in('lesson_id', lessonIds);
+      continueCourse.progress_percent = Math.round(((doneRows?.length || 0) / lessonIds.length) * 100);
+    }
+  }
 
   const { data: certs, error: certsError } = await supabase
     .from('certificates')

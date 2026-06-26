@@ -28,7 +28,7 @@ export function CourseTopBar({
       <div className="ml-auto flex items-center gap-3 lg:gap-5 min-w-0">
         {/* Overall course progress */}
         <div className="hidden sm:flex items-center gap-2.5">
-          <span className="text-[12px] text-[#6B6E76] whitespace-nowrap">Progress</span>
+          <span className="text-[12px] text-[#6B6E76] whitespace-nowrap">Course progress</span>
           <div className="w-24 lg:w-32 h-1.5 rounded-full bg-[#EFE4E2] overflow-hidden">
             <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${overallPercent}%`, background: ACCENT }} />
           </div>

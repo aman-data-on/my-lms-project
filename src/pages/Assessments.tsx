@@ -692,9 +692,11 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
           <h2 className="text-2xl font-bold text-slate-800">Assessment Center</h2>
           <p className="text-sm text-slate-500 mt-1">Select a course to view and take its assessments</p>
         </div>
-        <button onClick={() => setShowBuilder(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors">
-          <Plus className="w-4 h-4" /> Create Assessment
-        </button>
+        {isAdmin && (
+          <button onClick={() => setShowBuilder(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors">
+            <Plus className="w-4 h-4" /> Create Assessment
+          </button>
+        )}
       </div>
 
       {isLoading ? (

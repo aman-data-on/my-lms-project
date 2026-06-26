@@ -13,7 +13,7 @@ export function ArchitectureDiagram({ data, surface }: { data: ArchitectureData;
 
   return (
     <VisualShell surface={surface} Icon={Layers} eyebrow={data.eyebrow || 'Architecture'} title={data.title || 'How It Is Built'}>
-      <div className="space-y-2.5">
+      <div className="h-full flex flex-col justify-center gap-2.5">
         {layers.map((layer, i) => {
           const accent = layer.accent || ACCENT;
           const components = Array.isArray(layer.components) ? layer.components.filter((c) => c?.label?.trim()) : [];

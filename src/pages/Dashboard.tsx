@@ -92,6 +92,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
     { label: 'Pending Assessments', value: stats.pendingAssessments, icon: ClipboardCheck, color: 'bg-rose-50 text-rose-600' },
   ];
 
+  const overallPct = Math.round(((stats.coursesCompleted + stats.certificatesEarned) / Math.max(stats.coursesEnrolled * 2, 1)) * 100);
+
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'course_enrolled': return BookOpen;
@@ -115,21 +117,22 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
               <div className="flex-1 max-w-xs">
                 <div className="flex justify-between text-sm mb-1">
                   <span>Overall Onboarding Progress</span>
-                  <span className="font-semibold">{Math.round(((stats.coursesCompleted + stats.certificatesEarned) / Math.max(stats.coursesEnrolled * 2, 1)) * 100)}%</span>
+                  <span className="font-semibold">{overallPct}%</span>
                 </div>
                 <div className="w-full bg-primary-900/30 rounded-full h-2.5">
                   <div
                     className="bg-white rounded-full h-2.5 transition-all duration-1000"
-                    style={{ width: `${Math.round(((stats.coursesCompleted + stats.certificatesEarned) / Math.max(stats.coursesEnrolled * 2, 1)) * 100)}%` }}
+                    style={{ width: `${overallPct}%` }}
                   />
                 </div>
               </div>
             </div>
           </div>
-          <div className="hidden md:block">
-            <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center">
-              <TrendingUp className="w-10 h-10 text-white/80" />
-            </div>
+          {/* Meaningful progress figure (was a label-less decorative icon) */}
+          <div className="hidden md:flex flex-col items-center justify-center w-24 h-24 bg-white/10 rounded-2xl flex-shrink-0">
+            <TrendingUp className="w-5 h-5 text-white/70 mb-0.5" aria-hidden="true" />
+            <span className="text-2xl font-bold leading-none">{overallPct}%</span>
+            <span className="text-[11px] text-primary-100 mt-0.5">complete</span>
           </div>
         </div>
       </div>
@@ -200,9 +203,10 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
                 </div>
                 <button
                   onClick={() => onNavigate('course-detail', { courseId: continueCourse.id, courseTitle: continueCourse.title })}
-                  className="self-center px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors"
+                  aria-label={`Continue: ${continueCourse.title}`}
+                  className="self-center inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1"
                 >
-                  Resume
+                  Continue <ArrowRight className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>

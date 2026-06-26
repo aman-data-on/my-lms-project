@@ -100,10 +100,10 @@ export function VisualShell({
   const t = tokensFor(surface);
   return (
     <div
-      className="rounded-xl overflow-hidden border shadow-sm"
+      className="rounded-xl overflow-hidden border shadow-sm flex flex-col"
       style={{ background: t.panel, borderColor: t.panel === '#FFFFFF' ? '#E6E5E0' : '#F1D2CE' }}
     >
-      <div className="h-[3px]" style={{ background: ACCENT }} />
+      <div className="h-[3px] flex-shrink-0" style={{ background: ACCENT }} />
       {(eyebrow || title) && (
         <header className={cn('flex items-center gap-3 px-5 sm:px-6 pt-4 pb-3.5 border-b', t.divider)}>
           {Icon && (
@@ -129,7 +129,7 @@ export function VisualShell({
           </div>
         </header>
       )}
-      <div className={cn(pad && 'p-4 sm:p-5')}>{children}</div>
+      <div className={cn('flex-1', pad && 'p-4 sm:p-5')}>{children}</div>
       {footer && <div className={cn('border-t px-5 sm:px-6 py-3', t.divider)}>{footer}</div>}
     </div>
   );
