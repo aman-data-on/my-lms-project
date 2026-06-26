@@ -209,3 +209,14 @@ All pages now route server data through `src/lib/api.ts` and react-query. No pag
 Pages fully migrated: `Dashboard`, `CourseDetail`, `MyCourses`, `CourseLibrary`, `Certificates`, `Settings`, `Assessments`
 
 Pages deferred (P2-E, per original plan): `AdminPanel`, `CourseBuilder` — high complexity, admin-only, regression risk.
+
+## P3+ - Module 1 premium lesson reader + project docs
+
+- Date: 2026-06-26
+- Summary: Built a data-driven lesson reader for Module 1 (dark course rail + light reading canvas) and added project guidance docs.
+- Reader: `src/components/LessonWorkspace.tsx` + `src/components/course/*` (dark `CourseSidebar`, `CourseTopBar`, `LessonHeader`, `LearningObjectiveCallout`, `LessonNavigation`, `TopicIllustration`) + visual block system `src/components/blocks/*` with a central `VisualBlockRenderer` and a single lucide icon registry (`blocks/icons.tsx`, no emoji).
+- Layout engine: two-column intro, auto-inferred vector illustrations, content-aware diagram+card horizontal pairing with equal-height cards, full-width lead.
+- Content: Module 1 migrated to JSON blocks (`supabase/migrations/20260625000001` → `20260626000006`); bespoke `public/illustrations/who-we-are.svg`. All lesson facts sourced from the original course content — presentation only is new.
+- Docs: added root `CLAUDE.md` (project guidance + full docs index), `docs/MEMORY.md` (durable decisions), refreshed `docs/AI_HANDOFF.md`. Convention: update CLAUDE.md / AI_HANDOFF.md / MEMORY.md / this CHANGELOG on every significant change.
+- Verification: `tsc --noEmit` 0 errors, `npm run build` passes. First push to `origin/main` = commit `967586c`.
+- Scope: Module 1 only; Modules 2–6 still use legacy `MODULE_SLIDES` in `SalesOnboardingCourse.tsx` (next migration target).

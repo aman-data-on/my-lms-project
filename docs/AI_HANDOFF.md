@@ -2,35 +2,56 @@
 
 > Context document for AI-assisted development continuity.
 > Maintained by: Claude Code (Anthropic) on behalf of the development team.
-> Last updated: 2026-06-24
+> Last updated: 2026-06-26
+> See also: [../CLAUDE.md](../CLAUDE.md) (start here + docs index) and
+> [MEMORY.md](MEMORY.md) (durable decisions). Update all three on each change.
 
 ---
 
 ## Project State Summary
 
-The Employee Onboarding LMS has completed Phases 1 (routing) and 2 (react-query data layer). The codebase is in a stable state with 0 TypeScript errors and a passing production build.
+Phases 1–2 (routing, react-query data layer) are complete. Phase 3 (UX/responsive
+redesign) is underway, and the **Module 1 premium lesson reader** is built and
+shipped. Codebase is stable: 0 TypeScript errors, passing production build.
+First push to `origin/main` landed as commit `967586c`.
 
 ### Completed Phases
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | P1 | React Router v6 integration, code splitting, auth guards | ✅ Complete |
-| P2-A | Lazy loading all routes (code splitting) | ✅ Complete |
-| P2-B | Dashboard + MyCourses react-query migration | ✅ Complete |
-| P2-C | CourseDetail + Settings react-query migration | ✅ Complete |
-| P2-D | Assessments react-query migration | ✅ Complete |
-| P2-Docs | Documentation catch-up per MASTER_REFACTOR_INSTRUCTIONS.md | ✅ Complete |
+| P2 | react-query data layer (Dashboard, MyCourses, CourseDetail, Assessments) | ✅ Complete |
+| P2-Docs | Documentation catch-up | ✅ Complete |
+| P3 | Responsive app shell, mobile sidebar a11y, shared UI foundation | ✅ Complete |
+| P3+ | **Module 1 premium reader** (see below) | ✅ Complete |
 
-### Next Phase
+### Module 1 premium reader (current flagship)
 
-**P3: UX and Responsive Redesign.** See `MASTER_REFACTOR_INSTRUCTIONS.md` for full scope. Key deliverables from the P3 brief:
-- Mobile-responsive sidebar (hamburger drawer)
-- Component library in `src/components/ui/` (Button, Card, Badge, Input, Spinner)
-- Skeleton loading states on Dashboard and CourseLibrary
-- Toast notification system for mutations
-- Submit-assessment confirmation dialog
-- Responsive layout fixes for CourseDetail and AdminPanel
-- Accessibility improvements (WCAG 2.1 AA)
+A data-driven lesson experience for Module 1 — **dark course rail + light reading
+canvas** — that replaced the old slide blob. Built across several sessions:
+
+- `LessonWorkspace.tsx`: dark `CourseSidebar` (active/done/locked states, module
+  progress, unlock card), `CourseTopBar` (progress + account actions), breadcrumb
+  + large red lesson number header, prev/up-next/next nav, mobile drawer.
+- Visual block system + central `VisualBlockRenderer`: timeline, key_facts,
+  architecture, ecosystem, use_case, feature_benefit, comparison, process,
+  scenario, data_viz, flashcards, knowledge_check. One lucide icon registry
+  (`blocks/icons.tsx`) — no emoji.
+- Content-aware layouts: two-column intro, auto-inferred vector illustrations
+  (`TopicIllustration.tsx`), diagram+card horizontal pairing with equal-height
+  cards, full-width lead, bespoke `public/illustrations/who-we-are.svg`.
+- Module 1 content migrated to JSON blocks via `supabase/migrations/2026062500000*`
+  → `2026062600000*`. **All lesson facts sourced from the original content; only
+  presentation is new** (see [MEMORY.md](MEMORY.md)).
+
+### Next Phase / step
+
+- **Migrate Modules 2–6** off the legacy hardcoded `MODULE_SLIDES` in
+  `SalesOnboardingCourse.tsx` into JSON blocks + the new reader (one module at a
+  time). Everything (sidebar, icons, illustrations, layout engine) is reusable.
+- Remaining P3 items: toast notifications, `src/components/ui/` library
+  completion, AdminPanel responsive/sort-filter, generated Supabase types.
+- Optional: wire the top-bar account actions (avatar/notifications) to real data.
 
 ---
 
