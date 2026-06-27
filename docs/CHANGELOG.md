@@ -1,5 +1,15 @@
 # Changelog
 
+## Module Overview redesign — light theme + hover-collapse rail
+
+- Date: 2026-06-27
+- Summary: Redesigned the Module Overview page in an all-light theme (brand red `#ED3237` + ink black `#1A1A1A` as the only accents; no dark surfaces). The course rail is now light and **auto-collapses to a 76px icon strip, expanding to 280px on cursor hover** so the reading canvas reclaims the width. Added a richer, screen-filling overview: a rose-gradient hero band with decorative geometry, quick-stat chips, a primary "Start lesson" CTA, an animated 3-column topic-card grid (per-card glyphs inferred from topic content, hover-lift + accent sweep), and an encouragement strip. Fully responsive (single column + hamburger drawer on mobile).
+- Content unchanged: all module/topic titles, the module summary, previews, and counts are rendered verbatim — only presentation (layout, icons, illustration, animation) was added, per the "no new facts" convention.
+- Files modified:
+  - [src/components/LessonWorkspace.tsx](src/components/LessonWorkspace.tsx) — redesigned `ModuleOverview`, hover-collapse rail wrapper, light mobile drawer, wider overview canvas (`max-w-[1600px]`).
+  - [src/components/course/CourseSidebar.tsx](src/components/course/CourseSidebar.tsx) — converted dark rail → light; collapsed icon-rail mode (progress ring, glyph badges) that expands on hover via `group/rail`; added `forceExpanded` for the mobile drawer.
+- Note: This intentionally departs from the previously documented "dark navigation chrome" invariant for this surface, at the user's explicit request (full light theme, hover-collapsible sidebar). Verified with the temporary Vite + headless-Chrome screenshot harness (desktop collapsed, expanded rail, mobile) — harness removed after verification. `tsc --noEmit` = 0 errors; `npm run build` passes.
+
 ## Phase 1 - Introduce router and API service (WIP)
 
 - Date: 2026-06-23

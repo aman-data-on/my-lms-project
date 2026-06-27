@@ -1,5 +1,9 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import {
+  ArrowRight, BookOpen, Boxes, CheckCircle2, Cloud, Clock, GitCompare, Layers,
+  Network, PlayCircle, Rocket, Route, Sparkles, Workflow, X, type LucideIcon,
+} from 'lucide-react';
+import { inferIllustrationKind, type IllustrationKind } from './course/TopicIllustration';
 import { safeHtml } from '../lib/sanitize';
 import type { BlockBase } from '../lib/blocks';
 import DOMPurify from 'dompurify';
@@ -327,59 +331,170 @@ function TopicPage({
 
 // ── Module overview ─────────────────────────────────────────────────────────────
 
+// Topic glyph — maps an inferred illustration kind to a crisp lucide icon so
+// each overview card carries a relevant, on-brand mark (no new facts, purely
+// presentational). Falls back to a book for unmatched concepts.
+const KIND_ICON: Record<IllustrationKind, LucideIcon> = {
+  infra: Cloud,
+  ecosystem: Network,
+  architecture: Layers,
+  comparison: GitCompare,
+  process: Workflow,
+  journey: Route,
+  products: Boxes,
+  concept: BookOpen,
+};
+
 function ModuleOverview({
   moduleNumber, moduleTitle, summary, topics, onSelectTopic,
 }: {
   moduleNumber: number; moduleTitle: string; summary: string | null; topics: Topic[]; onSelectTopic: (i: number) => void;
 }) {
-  return (
-    <div>
-      <LessonHeader
-        breadcrumbs={[`Module ${moduleNumber}`, moduleTitle]}
-        category="Module overview"
-        title={moduleTitle}
-        lead={summary || undefined}
-      />
+  const ACCENT = '#ED3237';
 
-      <section className="mt-10 lg:mt-12">
-        <div className="flex items-baseline justify-between mb-4">
-          <h2 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[#6B6E76]">
+  return (
+    <div className="animate-fade-in">
+      {/* ── Hero band ──────────────────────────────────────────────────────
+          A warm rose gradient panel that fills the top of the canvas with a
+          decorative motif on the right, so wide screens never read as empty. */}
+      <section
+        className="relative overflow-hidden rounded-3xl border border-[#F1DFDF] px-6 sm:px-10 py-9 lg:py-11"
+        style={{ background: 'linear-gradient(115deg,#FFFFFF 0%,#FFF6F5 48%,#FFEDEC 100%)' }}
+      >
+        {/* Decorative geometry (purely presentational, aria-hidden) */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div className="absolute -right-16 -top-20 w-72 h-72 rounded-full" style={{ background: 'radial-gradient(circle,rgba(237,50,55,0.10),transparent 70%)' }} />
+          <div className="absolute right-10 bottom-[-3rem] w-48 h-48 rounded-full border-[1.5px] border-[#F4C9CB]/60" />
+          <div className="absolute right-40 top-8 w-24 h-24 rounded-2xl border-[1.5px] border-[#F4C9CB]/50 rotate-12" />
+        </div>
+
+        <div className="relative max-w-[62ch]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 backdrop-blur border border-[#F1DFDF] px-3 py-1 text-[12px] font-bold tracking-wide" style={{ color: ACCENT }}>
+            <Sparkles className="w-3.5 h-3.5" /> Module {moduleNumber}
+          </span>
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A8E8E]">Module overview</p>
+          <h1
+            className="mt-1.5 font-extrabold text-[#1A1A1A] leading-[1.1] tracking-tight"
+            style={{ fontSize: 'clamp(1.9rem, 1.4rem + 2vw, 3rem)' }}
+          >
+            {moduleTitle}
+          </h1>
+          {summary && (
+            <p className="mt-4 text-[#4A4347] leading-relaxed" style={{ fontSize: 'clamp(1rem, 0.96rem + 0.25vw, 1.18rem)' }}>
+              {summary}
+            </p>
+          )}
+
+          {/* Quick stats + primary CTA — interactive entry point */}
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => onSelectTopic(0)}
+              className="group inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-[15px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#ED3237]"
+              style={{ background: ACCENT, boxShadow: '0 6px 18px rgba(237,50,55,0.30)' }}
+            >
+              <PlayCircle className="w-5 h-5" />
+              Start lesson
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </button>
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/70 border border-[#F1DFDF] px-3.5 py-2.5 text-[13px] font-semibold text-[#4A4347]">
+              <Layers className="w-4 h-4" style={{ color: ACCENT }} /> {topics.length} topics
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/70 border border-[#F1DFDF] px-3.5 py-2.5 text-[13px] font-semibold text-[#4A4347]">
+              <Clock className="w-4 h-4" style={{ color: ACCENT }} /> Self-paced
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Topics grid ─────────────────────────────────────────────────────
+          Rich, animated cards that fill wide screens (up to 3 columns). Each
+          card carries a relevant glyph, the same number + title + preview as
+          before — no content changes, just presentation. */}
+      <section className="mt-9 lg:mt-12">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.12em] text-[#6B6E76]">
+            <span className="inline-block w-6 h-[2px] rounded-full" style={{ background: ACCENT }} aria-hidden="true" />
             Topics in this module
           </h2>
-          <span className="text-[12px] text-[#938890] tabular-nums">{topics.length} topics</span>
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#9A8E8E] tabular-nums">
+            <BookOpen className="w-3.5 h-3.5" /> {topics.length} topics
+          </span>
         </div>
-        <ol className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {topics.map((topic, i) => (
-            <li key={topic.id}>
-              <button
-                onClick={() => onSelectTopic(i)}
-                className="group h-full w-full text-left flex items-start gap-3.5 rounded-xl border border-[#E6E5E0] bg-white hover:border-[#F1C9CB] hover:bg-[#FFFBFB] transition-colors px-4 py-4"
-              >
-                <span className="flex-shrink-0 mt-0.5 w-9 h-9 rounded-lg bg-[#FFF1F0] text-[#ED3237] text-[13px] font-bold flex items-center justify-center tabular-nums">
-                  {topic.label}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px] font-semibold text-[#221B1D] leading-snug">{topic.title}</span>
+
+        <ol className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
+          {topics.map((topic, i) => {
+            const Glyph = KIND_ICON[inferIllustrationKind(`${topic.title} ${topic.preview}`)];
+            return (
+              <li key={topic.id} className="animate-fade-in-up" style={{ animationDelay: `${i * 70}ms` }}>
+                <button
+                  onClick={() => onSelectTopic(i)}
+                  className="group relative h-full w-full text-left flex flex-col rounded-2xl border border-[#ECEAE5] bg-white p-5 transition-all duration-200 hover:-translate-y-1 hover:border-[#F1C9CB] hover:shadow-[0_14px_30px_rgba(26,26,26,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-2 overflow-hidden"
+                >
+                  {/* top accent sweep on hover */}
+                  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300" style={{ background: ACCENT }} />
+
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="inline-flex items-center justify-center w-12 h-12 rounded-xl transition-colors group-hover:scale-105 duration-200"
+                      style={{ background: '#FFF1F0', color: ACCENT }}
+                      aria-hidden="true"
+                    >
+                      <Glyph className="w-6 h-6" strokeWidth={1.75} />
+                    </span>
+                    <span className="text-[13px] font-bold tabular-nums px-2.5 py-1 rounded-lg bg-[#F4F2EE] text-[#9A8E8E] group-hover:bg-[#FFF1F0] group-hover:text-[#ED3237] transition-colors">
+                      {topic.label}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-4 text-[16px] font-bold text-[#1A1A1A] leading-snug">{topic.title}</h3>
                   {topic.preview && (
-                    <span className="block text-[13px] text-[#6B6E76] leading-snug mt-1 line-clamp-2">{topic.preview}</span>
+                    <p className="mt-1.5 text-[13.5px] text-[#6B6E76] leading-relaxed line-clamp-3">{topic.preview}</p>
                   )}
-                </span>
-                <span className="flex-shrink-0 self-center text-[#ED3237] translate-x-0 group-hover:translate-x-0.5 opacity-40 group-hover:opacity-100 transition-all text-[18px]">→</span>
-              </button>
-            </li>
-          ))}
+
+                  <span className="mt-4 pt-3 border-t border-[#F1EFEB] flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: ACCENT }}>
+                    Start topic
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ol>
       </section>
 
-      <div className="mt-10">
-        <button
-          onClick={() => onSelectTopic(0)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-[14px] font-semibold transition-colors"
-          style={{ background: '#ED3237', boxShadow: '0 1px 6px rgba(237,50,55,0.25)' }}
+      {/* ── Encouragement strip ─────────────────────────────────────────────
+          Fills the lower canvas on wide screens; motivational, no new facts. */}
+      <section className="mt-9 lg:mt-12">
+        <div
+          className="relative overflow-hidden rounded-2xl border border-[#ECEAE5] bg-white px-6 py-6 sm:px-8 flex flex-col sm:flex-row sm:items-center gap-5"
         >
-          Start lesson →
-        </button>
-      </div>
+          <span aria-hidden="true" className="absolute -left-8 -bottom-10 w-40 h-40 rounded-full" style={{ background: 'radial-gradient(circle,rgba(237,50,55,0.06),transparent 70%)' }} />
+          <span
+            className="relative flex-shrink-0 inline-flex items-center justify-center w-14 h-14 rounded-2xl"
+            style={{ background: '#FFF1F0', color: ACCENT }}
+            aria-hidden="true"
+          >
+            <Rocket className="w-7 h-7" strokeWidth={1.75} />
+          </span>
+          <div className="relative min-w-0 flex-1">
+            <h3 className="text-[16px] font-bold text-[#1A1A1A]">Ready to begin?</h3>
+            <p className="text-[14px] text-[#6B6E76] leading-relaxed mt-0.5">
+              Work through each topic at your own pace — your progress saves automatically as you go.
+            </p>
+          </div>
+          <div className="relative flex items-center gap-3 text-[13px] font-medium text-[#6B6E76]">
+            <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#16A34A]" /> Auto-saved</span>
+          </div>
+          <button
+            onClick={() => onSelectTopic(0)}
+            className="group relative inline-flex flex-shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[14px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#ED3237]"
+            style={{ background: ACCENT, boxShadow: '0 4px 14px rgba(237,50,55,0.28)' }}
+          >
+            Start lesson
+            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -467,7 +582,7 @@ export function LessonWorkspace({
 
   const prevDisabled = isOverview && lessonIndex === 0;
 
-  const sidebar = (
+  const buildSidebar = (forceExpanded: boolean) => (
     <CourseSidebar
       courseTitle={course.title}
       moduleNumber={moduleNumber}
@@ -479,27 +594,36 @@ export function LessonWorkspace({
       onBack={onBack}
       onSelectOverview={() => { setActive(-1); setSidebarOpen(false); }}
       onSelectTopic={goTo}
+      forceExpanded={forceExpanded}
     />
   );
 
   return (
     <div className="fixed inset-0 z-[60] flex" style={{ background: '#FAFAF8' }}>
-      {/* Desktop persistent sidebar */}
-      <div className="hidden lg:block w-[280px] flex-shrink-0">{sidebar}</div>
+      {/* Desktop rail — collapsed to an icon strip; auto-expands on hover.
+          `group/rail` drives the label fades inside CourseSidebar; the width
+          animates so the reading canvas reclaims the space when not hovered. */}
+      <div className="hidden lg:block flex-shrink-0 w-[76px] hover:w-[280px] group/rail transition-[width] duration-300 ease-out overflow-hidden shadow-[2px_0_16px_rgba(26,26,26,0.04)] hover:shadow-[6px_0_28px_rgba(26,26,26,0.10)] z-[65]">
+        {/* inner is fixed at full width so its content never reflows; the outer
+            wrapper clips to the animated width, so labels slide into view. */}
+        <div className="h-full w-[280px]">
+          {buildSidebar(false)}
+        </div>
+      </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer (light) */}
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Module navigation">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
-          <div className="absolute left-0 top-0 h-full w-[280px] max-w-[85vw] shadow-2xl" style={{ background: '#191B1F' }}>
+          <div className="absolute inset-0 bg-[#1A1A1A]/40 backdrop-blur-[2px] animate-fade-in" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
+          <div className="absolute left-0 top-0 h-full w-[280px] max-w-[85vw] shadow-2xl animate-slide-in-left" style={{ background: '#FFFFFF' }}>
             <button
               onClick={() => setSidebarOpen(false)}
               aria-label="Close menu"
-              className="absolute right-2 top-2 z-10 w-8 h-8 rounded-lg flex items-center justify-center text-[#C7CACF] hover:bg-white/10"
+              className="absolute right-2 top-2 z-10 w-8 h-8 rounded-lg flex items-center justify-center text-[#94908C] hover:bg-[#F2F1ED]"
             >
               <X className="w-4 h-4" />
             </button>
-            {sidebar}
+            {buildSidebar(true)}
           </div>
         </div>
       )}
@@ -509,7 +633,9 @@ export function LessonWorkspace({
         <CourseTopBar courseTitle={course.title} overallPercent={overallPercent} onMenu={() => setSidebarOpen(true)} />
 
         <div id="lesson-scroll" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto w-full max-w-[1320px] min-w-0 px-5 sm:px-8 lg:px-14 py-8 lg:py-12">
+          {/* The overview uses a wider canvas (cards + hero fill the screen);
+              topic reading pages keep a narrower, more readable measure. */}
+          <div className={`mx-auto w-full min-w-0 px-5 sm:px-8 lg:px-14 py-8 lg:py-12 ${isOverview ? 'max-w-[1600px]' : 'max-w-[1320px]'}`}>
             {isOverview ? (
               <ModuleOverview
                 moduleNumber={moduleNumber}
