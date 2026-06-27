@@ -1,5 +1,13 @@
 # Changelog
 
+## Phase-1 arc — topic progression, completion modal, dashboard resume, no silent failures (2026-06-28)
+
+- **Topic-level progression**: new `topic_progress` table (own-row RLS) + a completion model ([src/lib/completion.ts](../src/lib/completion.ts), per-topic rules + weighting) that rolls up into `lesson_progress` (still the unlock authority); resume = first-incomplete-required → last-visited → first-topic. Migration [20260627000003_topic_progress.sql](../supabase/migrations/20260627000003_topic_progress.sql). Backward-compatible, no backfill.
+- **Module-completion modal** ([src/components/ModuleCompleteModal.tsx](../src/components/ModuleCompleteModal.tsx)): the lesson end CTA is now "Mark Module Complete" → marks complete + unlocks next + shows an Award modal instead of auto-navigating. Real learning objective (the lesson's authored "Goal"), course-wide X/N progress, "Module N unlocked"; Continue, or Back to Dashboard / ESC / backdrop. Focus-trapped, responsive, ease-out, no confetti. Wired in `CourseDetail.markCompleteAndContinue`.
+- **Dashboard "Continue Learning" fix**: the `enrollments → courses(...)` embed is an object, but the code read `courses[0]` → undefined id/title → empty slug → `navigate('/course/')` bounced back to the dashboard. Now reads the embed as an object and deep-links to the resume lesson (new users → Module 1, Topic 1); the router guards empty slugs ([src/lib/api.ts](../src/lib/api.ts), [src/App.tsx](../src/App.tsx), [src/pages/Dashboard.tsx](../src/pages/Dashboard.tsx)).
+- **No silent failures**: wired the previously-unused toast system across enroll, assessment start/submit/create, certificate download, course-builder save, and admin delete/toggle/save-user. Standard everywhere: loading → disabled + spinner; error → toast; validation → message (not a silent `return`); success only on confirmed success; never a clickable button that goes nowhere. `api.ts` upserts now pass `onConflict` (was 409-ing on existing rows).
+- `tsc` 0 errors, `npm run build` passes. Branch `phase1-lms-redesign` (PR into `main`).
+
 ## Progression — sequential unlock + URL access guard (2026-06-27)
 
 - Sequential module/phase unlock and resume were already derived from persisted `lesson_progress` (a module unlocks only when the previous is complete; phases unlock implicitly because phases are contiguous module ranges; "Continue Learning" resumes at the first incomplete module). This pass closes the gaps so the sequence can't be bypassed and the locked state is clear everywhere.
