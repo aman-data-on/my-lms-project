@@ -14,6 +14,7 @@ import { slugify } from '../lib/slugify';
 import { pushLessonCompletion, markLessonCompleteInProgress } from '../lib/reportData';
 import { Play, CheckCircle2, Clock, Award } from 'lucide-react';
 import { LessonWorkspace } from '../components/LessonWorkspace';
+import { Module1Reader, deriveTopics, type NavPhase } from '../components/Module1Reader';
 import { ConfettiEffect } from '../components/ConfettiEffect';
 import { CourseIndex, type IndexPhase, type IndexModule } from '../components/CourseIndex';
 import { Button } from '../components/ui/Button';
@@ -207,6 +208,21 @@ export default function CourseDetail({
     })),
   [sectionOrder, sectionMap, lessons]);
 
+  // Full Phase → Module → Topic tree for the Module 1 (Kinetic) reader's rail.
+  const courseTree: NavPhase[] = useMemo(() =>
+    sectionOrder.map((secName) => ({
+      name: secName,
+      modules: (sectionMap[secName] || []).map((lIdx) => ({
+        lessonIndex: lIdx,
+        id: lessons[lIdx].id,
+        title: lessons[lIdx].title,
+        completed: completedLessons.has(lessons[lIdx].id),
+        accessible: isAdmin || lIdx === 0 || completedLessons.has(lessons[lIdx - 1]?.id),
+        topics: deriveTopics(lessons[lIdx].video_url),
+      })),
+    })),
+  [sectionOrder, sectionMap, lessons, completedLessons, isAdmin]);
+
   const getPhaseStatus = (phaseNum: number): 'completed' | 'in_progress' | 'locked' | 'not_started' => {
     const phase = indexPhases.find(p => p.number === phaseNum);
     if (!phase) return 'not_started';
@@ -371,7 +387,28 @@ export default function CourseDetail({
       )}
 
       {/* ── Lesson workspace ─────────────────────────────────────────────────── */}
-      {isReaderView && currentLesson && (
+      {/* Module 1 (Company Overview) uses the Kinetic Enterprise reader; all other
+          modules keep the standard LessonWorkspace. */}
+      {isReaderView && currentLesson && /company overview/i.test(currentLesson.title) && currentLessonIndex === 0 ? (
+        <Module1Reader
+          lesson={currentLesson}
+          course={course}
+          courseProgressPercent={progressPercent}
+          isCurrentCompleted={isCurrentCompleted}
+          isCourseDone={isCourseDone}
+          courseTree={courseTree}
+          currentLessonIndex={currentLessonIndex}
+          onSelectModule={goToLesson}
+          onBack={goToOverview}
+          onMarkComplete={markCompleteAndContinue}
+          onNextLesson={() => {
+            setShowCelebration(true);
+            setShowHappyMsg(true);
+            goToLesson(currentLessonIndex + 1);
+          }}
+          onAssessment={() => onNavigate('assessments')}
+        />
+      ) : isReaderView && currentLesson && (
         <LessonWorkspace
           lesson={currentLesson}
           course={course}

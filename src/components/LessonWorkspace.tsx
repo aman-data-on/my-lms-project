@@ -267,7 +267,9 @@ function TopicPage({
   } else if (placeDiagramBeside) {
     introRight = renderVisual(topic.visuals[sideDiagramIdx], 'side');
     sideConsumed = sideDiagramIdx;
-  } else if (sideDiagramIdx < 0 && !hasPair && hasProse) {
+  } else if (sideDiagramIdx < 0 && !hasPair && hasProse && topic.visuals.length === 0) {
+    // Only fall back to a generic illustration when the topic has NO real visual
+    // of its own — never ship a content-free skeleton beside real teaching blocks.
     introRight = <TopicIllustration title={topic.title} text={topic.leadHtml} />;
     introIsIllustration = true;
   }
@@ -379,7 +381,8 @@ function ModuleOverview({
           </button>
         </div>
         <div className="w-full lg:max-w-[460px] lg:justify-self-center">
-          <TopicIllustration title={moduleTitle} text={summary || ''} />
+          {/* Real module outline (actual topic names) instead of a generic skeleton. */}
+          <TopicIllustration title={moduleTitle} content={{ shape: 'flow', steps: topics.slice(0, 4).map((t) => ({ label: t.title })) }} />
         </div>
       </div>
 

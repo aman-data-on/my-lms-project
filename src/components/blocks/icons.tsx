@@ -15,9 +15,11 @@ import {
 
 const ICONS: Record<string, LucideIcon> = {
   // infrastructure / cloud
-  cloud: Cloud, server: Server, network: Network, database: Database,
-  'hard-drive': HardDrive, folder: FolderOpen, cpu: Cpu, gauge: Gauge,
-  building: Building2, colocation: Building2,
+  cloud: Cloud, server: Server, servers: Server, network: Network, database: Database,
+  'hard-drive': HardDrive, folder: FolderOpen, cpu: Cpu, chip: Cpu, gauge: Gauge,
+  performance: Gauge, building: Building2, colocation: Building2, company: Building2,
+  architecture: Boxes, comparison: Scale, features: Layers, benefits: TrendingUp,
+  security: Shield, team: Users, customer: Users,
   // platform / dev
   code: Code, unlock: Unlock, lock: Lock, zap: Zap, layers: Layers, boxes: Boxes,
   puzzle: Puzzle, scale: Scale, settings: Settings, wrench: Wrench,
