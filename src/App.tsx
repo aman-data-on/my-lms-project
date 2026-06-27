@@ -75,8 +75,13 @@ function RouteWrappers() {
       case 'my-courses': return navigate('/my-courses');
       case 'course-library': return navigate('/course-library');
       case 'course-detail': {
-        const slug = data?.slug ?? (data?.courseTitle ? slugify(data.courseTitle) : data?.courseId ?? '');
-        return navigate(`/course/${slug}`);
+        // Build the slug from the title (the route matches by slugified title, so
+        // a raw courseId would never match). Guard empty → never navigate to a
+        // dead `/course/` that just bounces back to the dashboard.
+        const slug = data?.slug ?? (data?.courseTitle ? slugify(data.courseTitle) : '');
+        if (!slug) return;
+        const lessonPart = data?.lessonSlug ? `/lesson/${data.lessonSlug}` : '';
+        return navigate(`/course/${slug}${lessonPart}`);
       }
       case 'assessments': return navigate('/assessments');
       case 'certificates': return navigate('/certificates');
@@ -142,7 +147,7 @@ function AppContent() {
         <>
           <a
             href="#main-content"
-            className="absolute -top-full left-1/2 -translate-x-1/2 z-[200] focus-visible:top-4 px-4 py-2 bg-primary-800 text-white rounded-lg text-sm font-medium shadow-lg whitespace-nowrap transition-[top] motion-reduce:transition-none focus:outline-none"
+            className="absolute -top-full left-1/2 -translate-x-1/2 z-[200] focus-visible:top-4 px-4 py-2 bg-primary-700 text-white rounded-lg text-sm font-medium shadow-lg whitespace-nowrap transition-[top] motion-reduce:transition-none focus:outline-none"
           >
             Skip to main content
           </a>

@@ -6,6 +6,7 @@ import {
   submitAssessment, createAssessment,
   SALES_COURSE_ID, SALES_ASSESSMENT_ORDER,
 } from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
 import {
   ClipboardCheck, Clock, Trophy, Plus, X, ChevronDown, ChevronUp,
   GripVertical, Trash2, Save, Play, CheckCircle2, XCircle,
@@ -63,6 +64,9 @@ const QUESTION_TYPES = [
 export default function Assessments({ onNavigate }: { onNavigate: (page: string, data?: any) => void }) {
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // View state: 'courses' | 'list' | 'take' | 'result' | 'builder'
   const [view, setView] = useState<'courses' | 'list' | 'take' | 'result' | 'builder'>('courses');
@@ -135,16 +139,28 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
 
   // ─── Assessment Taking ────────────────────────────────────────────
   const startAssessment = async (assessment: Assessment) => {
-    const questionsList = await fetchAssessmentQuestions(assessment.id);
-    setTakingAssessment(assessment);
-    setTakingQuestions(questionsList);
-    setCurrentQuestionIndex(0);
-    setAnswers({});
-    setTimeLeft(assessment.time_limit * 60);
-    setSubmitted(false);
-    setResult(null);
-    setView('take');
-    await startAssessmentAttempt(user!.id, assessment.id, assessment.title);
+    if (startingId) return;
+    setStartingId(assessment.id);
+    try {
+      const questionsList = await fetchAssessmentQuestions(assessment.id);
+      if (!questionsList.length) {
+        toast('This assessment has no questions yet. Please contact your administrator.', 'warning');
+        return;
+      }
+      setTakingAssessment(assessment);
+      setTakingQuestions(questionsList);
+      setCurrentQuestionIndex(0);
+      setAnswers({});
+      setTimeLeft(assessment.time_limit * 60);
+      setSubmitted(false);
+      setResult(null);
+      setView('take');
+      await startAssessmentAttempt(user!.id, assessment.id, assessment.title);
+    } catch (err: any) {
+      toast(err?.message || 'Could not start the assessment. Please try again.', 'error');
+    } finally {
+      setStartingId(null);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -154,7 +170,8 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
   };
 
   const handleSubmit = async () => {
-    if (!takingAssessment || !user) return;
+    if (!takingAssessment || !user || submitting) return;
+    setSubmitting(true);
     setSubmitted(true);
 
     let correct = 0;
@@ -187,20 +204,26 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
       ? SALES_ASSESSMENT_ORDER.indexOf(takingAssessment.title)
       : undefined;
 
-    await submitAssessment({
-      userId: user.id,
-      assessmentId: takingAssessment.id,
-      assessmentTitle: takingAssessment.title,
-      courseId: takingAssessment.course_id,
-      courseName: takingAssessment.courses?.title || takingAssessment.title,
-      score,
-      passed,
-      answers,
-      salesPhaseIndex,
-    });
-
-    await queryClient.invalidateQueries({ queryKey: ['assessments-data', user.id] });
-    setView('result');
+    try {
+      await submitAssessment({
+        userId: user.id,
+        assessmentId: takingAssessment.id,
+        assessmentTitle: takingAssessment.title,
+        courseId: takingAssessment.course_id,
+        courseName: takingAssessment.courses?.title || takingAssessment.title,
+        score,
+        passed,
+        answers,
+        salesPhaseIndex,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['assessments-data', user.id] });
+      setView('result');
+    } catch (err: any) {
+      toast(err?.message || 'Could not submit your assessment. Please try again.', 'error');
+      setSubmitted(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ─── Builder Functions ────────────────────────────────────────────
@@ -219,7 +242,10 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
       setAssessmentInfo({ title: '', course_id: '', time_limit: 30, passing_score: 70 });
       setQuestions([]);
       queryClient.invalidateQueries({ queryKey: ['assessments-data', user?.id] });
+      toast('Assessment created', 'success');
     },
+    onError: (err: any) =>
+      toast(err?.message || 'Could not create the assessment. Please try again.', 'error'),
   });
 
   const handleCreateAssessment = () => {
@@ -373,12 +399,16 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
                 Previous
               </button>
               {currentQuestionIndex < takingQuestions.length - 1 ? (
-                <button onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)} className="px-5 py-2.5 bg-primary-800 text-white rounded-lg hover:bg-primary-900 flex items-center gap-2">
+                <button onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)} className="px-5 py-2.5 bg-primary-700 text-white rounded-lg hover:bg-primary-800 flex items-center gap-2">
                   Next <ArrowRight className="w-4 h-4" />
                 </button>
               ) : (
-                <button onClick={handleSubmit} className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4" /> Submit
+                <button onClick={handleSubmit} disabled={submitting} className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {submitting ? (
+                    <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Submitting…</>
+                  ) : (
+                    <><CheckCircle2 className="w-4 h-4" /> Submit</>
+                  )}
                 </button>
               )}
             </div>
@@ -440,7 +470,7 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
 
           <div className="flex justify-center gap-3">
             {result.passed && (
-              <button onClick={() => onNavigate('certificates')} className="px-6 py-2.5 bg-primary-800 text-white font-medium rounded-lg hover:bg-primary-900 transition-colors">
+              <button onClick={() => onNavigate('certificates')} className="px-6 py-2.5 bg-primary-700 text-white font-medium rounded-lg hover:bg-primary-800 transition-colors">
                 View Certificate
               </button>
             )}
@@ -502,32 +532,48 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
               leftBorder = 'border-l-4 border-green-500';
               statusBadge = <span className="px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Passed</span>;
               actionButton = (
-                <button onClick={() => startAssessment(assessment)} className="px-4 py-2 bg-primary-50 text-primary-700 text-sm font-medium rounded-lg hover:bg-primary-100 transition-colors flex items-center gap-2">
-                  <Play className="w-4 h-4" /> Retake
+                <button onClick={() => startAssessment(assessment)} disabled={startingId === assessment.id} className="px-4 py-2 bg-primary-50 text-primary-700 text-sm font-medium rounded-lg hover:bg-primary-100 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {startingId === assessment.id ? (
+                    <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Starting…</>
+                  ) : (
+                    <><Play className="w-4 h-4" /> Retake</>
+                  )}
                 </button>
               );
             } else if (attempt?.status === 'failed') {
               leftBorder = 'border-l-4 border-red-400';
               statusBadge = <span className="px-2.5 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-full flex items-center gap-1"><XCircle className="w-3 h-3" /> Failed</span>;
               actionButton = (
-                <button onClick={() => startAssessment(assessment)} className="px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors flex items-center gap-2">
-                  <Play className="w-4 h-4" /> Retake
+                <button onClick={() => startAssessment(assessment)} disabled={startingId === assessment.id} className="px-4 py-2 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {startingId === assessment.id ? (
+                    <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Starting…</>
+                  ) : (
+                    <><Play className="w-4 h-4" /> Retake</>
+                  )}
                 </button>
               );
             } else if (attempt?.status === 'in_progress') {
               leftBorder = 'border-l-4 border-blue-500';
               statusBadge = <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
               actionButton = (
-                <button onClick={() => startAssessment(assessment)} className="px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors flex items-center gap-2">
-                  <Play className="w-4 h-4" /> Continue
+                <button onClick={() => startAssessment(assessment)} disabled={startingId === assessment.id} className="px-4 py-2 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {startingId === assessment.id ? (
+                    <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Starting…</>
+                  ) : (
+                    <><Play className="w-4 h-4" /> Continue</>
+                  )}
                 </button>
               );
             } else {
               leftBorder = 'border-l-4 border-slate-200';
               statusBadge = <span className="px-2.5 py-1 bg-slate-50 text-slate-500 text-xs font-medium rounded-full">Not Started</span>;
               actionButton = (
-                <button onClick={() => startAssessment(assessment)} className="px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors flex items-center gap-2">
-                  <Play className="w-4 h-4" /> Start
+                <button onClick={() => startAssessment(assessment)} disabled={startingId === assessment.id} className="px-4 py-2 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {startingId === assessment.id ? (
+                    <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Starting…</>
+                  ) : (
+                    <><Play className="w-4 h-4" /> Start</>
+                  )}
                 </button>
               );
             }
@@ -610,7 +656,7 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-slate-800">Questions ({questions.length})</h3>
               <div className="relative">
-                <button onClick={() => setShowQuestionTypeMenu(!showQuestionTypeMenu)} className="flex items-center gap-2 px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors">
+                <button onClick={() => setShowQuestionTypeMenu(!showQuestionTypeMenu)} className="flex items-center gap-2 px-4 py-2 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors">
                   <Plus className="w-4 h-4" /> Add Question
                 </button>
                 {showQuestionTypeMenu && (
@@ -675,8 +721,12 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
 
           <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-6">
             <button onClick={() => setShowBuilder(false)} className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-lg">Cancel</button>
-            <button onClick={handleCreateAssessment} disabled={!assessmentInfo.title || questions.length === 0} className="px-5 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 disabled:opacity-50">
-              <Save className="w-4 h-4 inline mr-2" /> Save Assessment
+            <button onClick={handleCreateAssessment} disabled={!assessmentInfo.title || questions.length === 0 || createMutation.isPending} className="px-5 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 disabled:opacity-50">
+              {createMutation.isPending ? (
+                <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin inline-block mr-2 align-[-2px]" aria-hidden="true" /> Saving…</>
+              ) : (
+                <><Save className="w-4 h-4 inline mr-2" /> Save Assessment</>
+              )}
             </button>
           </div>
         </div>
@@ -693,7 +743,7 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
           <p className="text-sm text-slate-500 mt-1">Select a course to view and take its assessments</p>
         </div>
         {isAdmin && (
-          <button onClick={() => setShowBuilder(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors">
+          <button onClick={() => setShowBuilder(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors">
             <Plus className="w-4 h-4" /> Create Assessment
           </button>
         )}
@@ -751,7 +801,7 @@ export default function Assessments({ onNavigate }: { onNavigate: (page: string,
                       <span className="font-medium text-primary-700">{progress.percent}%</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-1.5">
-                      <div className="bg-primary-500 rounded-full h-1.5 transition-all" style={{ width: `${progress.percent}%` }} />
+                      <div className="bg-primary-600 rounded-full h-1.5 transition-all" style={{ width: `${progress.percent}%` }} />
                     </div>
                   </div>
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## Progression — sequential unlock + URL access guard (2026-06-27)
+
+- Sequential module/phase unlock and resume were already derived from persisted `lesson_progress` (a module unlocks only when the previous is complete; phases unlock implicitly because phases are contiguous module ranges; "Continue Learning" resumes at the first incomplete module). This pass closes the gaps so the sequence can't be bypassed and the locked state is clear everywhere.
+- **Access guard** ([src/pages/CourseDetail.tsx](../src/pages/CourseDetail.tsx)): the reader now redirects to the overview if the requested lesson is locked (or the slug is invalid) — typing a locked lesson's URL no longer bypasses progression. Verified live: locked Module 9 URL → redirected; current Module 8 URL → opens.
+- **No-bounce auto-advance**: on completing a module, progress is optimistically written to the query cache before navigating, so the just-unlocked next module passes the guard immediately (no race with the refetch). Completion still persists to the DB, invalidates progress, shows the confetti + "Happy Learning" toast, and navigates to the next module.
+- **Locked-state UI**: Module 1 reader rail now shows a lock on locked phases and tooltips on locked phases/modules/topics ("Complete Phase N to unlock" / "Complete Module N to unlock"), keeps locked items disabled (reduced opacity), and only navigates into accessible modules ([src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx)). Overview curriculum already showed locks/opacity/hints; added matching tooltips on locked module rows ([src/components/CourseIndex.tsx](../src/components/CourseIndex.tsx)).
+- Data integrity: unlocking is driven entirely by persisted progress, so refresh/logout/device changes preserve completed + unlocked + current position. (Progression granularity is module-level — the persisted unit; topics are read in order within a module, and there are no knowledge-check blocks to gate yet.)
+- `tsc` 0 errors, `npm run build` passes.
+
 ## Icons — fix empty KPI slot + section-heading icons (2026-06-27)
 
 - Bug: the "Global Presence" key-fact rendered an empty box — its data icon was `servers`, which wasn't in the registry (only `server`), so it resolved to nothing.

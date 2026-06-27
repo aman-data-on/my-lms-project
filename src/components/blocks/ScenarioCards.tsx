@@ -1,7 +1,7 @@
 import { ArrowRight, Lightbulb, MessageSquare } from 'lucide-react';
 import type { ScenarioCardsData } from '../../lib/blocks';
 import { cn } from '../../lib/cn';
-import { ACCENT, BlockFallback, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
+import { ACCENT, BlockFallback, HOVER_CARD, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
 import { resolveBlockIcon } from './icons';
 
 // Real-world situation → recommended solution. Teaches applied judgement.
@@ -14,7 +14,7 @@ export function ScenarioCards({ data, surface }: { data: ScenarioCardsData; surf
     <VisualShell surface={surface} Icon={Lightbulb} eyebrow={data.eyebrow || 'Scenario'} title={data.title || 'Situation → Solution'}>
       <div className="space-y-2.5">
         {scenarios.map((s, i) => (
-          <div key={i} className={cn('rounded-xl p-3.5', t.card)}>
+          <div key={i} className={cn('rounded-xl p-3.5', t.card, HOVER_CARD)}>
             <div className="flex items-start gap-2.5">
               {(() => { const Icon = resolveBlockIcon(s.icon) ?? MessageSquare; return <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: ACCENT }} aria-hidden="true" />; })()}
               <div className="min-w-0 flex-1">

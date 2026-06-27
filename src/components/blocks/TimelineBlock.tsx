@@ -1,7 +1,7 @@
 import { TrendingUp } from 'lucide-react';
 import type { TimelineData } from '../../lib/blocks';
 import { cn } from '../../lib/cn';
-import { ACCENT, BlockFallback, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
+import { ACCENT, BlockFallback, HOVER_CARD, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
 import { resolveBlockIcon } from './icons';
 
 // Milestone progression styled like the reference: a circular icon badge on
@@ -19,10 +19,10 @@ export function TimelineBlock({ data, surface }: { data: TimelineData; surface: 
           const c = step.color || ACCENT;
           const Icon = resolveBlockIcon(step.icon);
           return (
-            <li key={i} className="flex flex-col items-center text-center h-full">
+            <li key={i} className="group flex flex-col items-center text-center h-full">
               {/* Icon badge */}
               <span
-                className="flex-shrink-0 inline-flex items-center justify-center w-14 h-14 rounded-full leading-none"
+                className="flex-shrink-0 inline-flex items-center justify-center w-14 h-14 rounded-full leading-none transition-transform duration-200 ease-out group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                 style={{ background: withAlpha(c, '14'), border: `2px solid ${withAlpha(c, '55')}` }}
                 aria-hidden="true"
               >
@@ -32,7 +32,7 @@ export function TimelineBlock({ data, surface }: { data: TimelineData; surface: 
               </span>
 
               {/* Card — flex-1 so every card fills its row to an equal height */}
-              <div className={cn('mt-3 w-full flex-1 rounded-xl border px-3.5 py-3.5 flex flex-col items-center', t.card)}>
+              <div className={cn('mt-3 w-full flex-1 rounded-xl border px-3.5 py-3.5 flex flex-col items-center', t.card, HOVER_CARD)}>
                 {step.date && (
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold tabular-nums"
@@ -43,7 +43,7 @@ export function TimelineBlock({ data, surface }: { data: TimelineData; surface: 
                 )}
                 <h4 className={cn('text-[14.5px] font-bold leading-snug mt-2', t.textPrimary)}>{step.title}</h4>
                 {step.description && (
-                  <p className={cn('text-[12.5px] leading-relaxed mt-1', t.textSecondary)}>{step.description}</p>
+                  <p className={cn('text-[12.5px] leading-relaxed mt-1 transition-colors duration-200 group-hover:text-[#3A3338]', t.textSecondary)}>{step.description}</p>
                 )}
               </div>
 

@@ -30,13 +30,13 @@ export default function Reports() {
             <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
               <button
                 onClick={() => setView('employee')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'employee' ? 'bg-primary-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'employee' ? 'bg-primary-700 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 My Report
               </button>
               <button
                 onClick={() => setView('admin')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'admin' ? 'bg-primary-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'admin' ? 'bg-primary-700 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 Admin
               </button>
@@ -230,7 +230,7 @@ function EmployeeReport({ userId }: { userId: string }) {
               <div key={d.day} className="flex items-center gap-3">
                 <span className="text-xs text-slate-500 w-8">{d.day}</span>
                 <div className="flex-1 bg-slate-100 rounded-full h-2">
-                  <div className="bg-primary-500 rounded-full h-2 transition-all" style={{ width: `${d.pct}%` }} />
+                  <div className="bg-primary-600 rounded-full h-2 transition-all" style={{ width: `${d.pct}%` }} />
                 </div>
                 <span className="text-xs text-slate-500 w-10 text-right">{d.count}</span>
               </div>
@@ -255,7 +255,7 @@ function EmployeeReport({ userId }: { userId: string }) {
                   <span className="text-slate-500">{item.pct}%</span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2">
-                  <div className="bg-primary-500 rounded-full h-2 transition-all" style={{ width: `${item.pct}%` }} />
+                  <div className="bg-primary-600 rounded-full h-2 transition-all" style={{ width: `${item.pct}%` }} />
                 </div>
               </div>
             ))}
@@ -291,7 +291,7 @@ function EmployeeReport({ userId }: { userId: string }) {
                   <td className="py-3">
                     <div className="flex items-center gap-2">
                       <div className="w-20 bg-slate-100 rounded-full h-1.5">
-                        <div className="bg-primary-500 rounded-full h-1.5" style={{ width: `${Math.min(100, (row.completed / row.total) * 100)}%` }} />
+                        <div className="bg-primary-600 rounded-full h-1.5" style={{ width: `${Math.min(100, (row.completed / row.total) * 100)}%` }} />
                       </div>
                       <span className="text-xs text-slate-500">{row.completed} of {row.total}</span>
                     </div>
@@ -611,7 +611,7 @@ function AdminReport() {
                 <td className="py-3">
                   <div className="flex items-center gap-2">
                     <div className="w-20 bg-slate-100 rounded-full h-1.5">
-                      <div className="bg-primary-500 rounded-full h-1.5" style={{ width: `${row.rate}%` }} />
+                      <div className="bg-primary-600 rounded-full h-1.5" style={{ width: `${row.rate}%` }} />
                     </div>
                     <span className="text-xs text-slate-500">{row.rate}%</span>
                   </div>
@@ -683,7 +683,7 @@ function AdminReport() {
                               <span className="text-slate-700 font-medium">{c.courseName}</span>
                               <div className="flex items-center gap-3">
                                 <div className="w-24 bg-slate-200 rounded-full h-1.5">
-                                  <div className="bg-primary-500 rounded-full h-1.5" style={{ width: `${Math.min(100, (c.progress / c.total) * 100)}%` }} />
+                                  <div className="bg-primary-600 rounded-full h-1.5" style={{ width: `${Math.min(100, (c.progress / c.total) * 100)}%` }} />
                                 </div>
                                 <StatusBadge status={c.status} />
                               </div>

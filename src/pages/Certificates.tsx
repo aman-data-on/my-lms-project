@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchCertificates } from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
 import { Award, Download, Eye, X, GraduationCap, Calendar, TrendingUp, CheckCircle2, Star } from 'lucide-react';
 import { formatDate } from '../lib/utils';
 
@@ -25,6 +26,8 @@ export default function Certificates() {
   const { user, isAdmin } = useAuth();
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const certRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
 
   const { data: certificates = [], isLoading } = useQuery({
     queryKey: ['certificates', user?.id],
@@ -34,20 +37,27 @@ export default function Certificates() {
 
   const downloadPDF = async () => {
     if (!certRef.current || !selectedCert) return;
-    const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-      import('html2canvas'),
-      import('jspdf'),
-    ]);
-    const canvas = await html2canvas(certRef.current, { scale: 2, backgroundColor: '#ffffff' });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('landscape', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const yPos = (pageHeight - imgHeight) / 2;
-    pdf.addImage(imgData, 'PNG', 0, yPos, imgWidth, imgHeight);
-    pdf.save(`certificate-${selectedCert.certificate_id}.pdf`);
+    setDownloading(true);
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+      const canvas = await html2canvas(certRef.current, { scale: 2, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const yPos = (pageHeight - imgHeight) / 2;
+      pdf.addImage(imgData, 'PNG', 0, yPos, imgWidth, imgHeight);
+      pdf.save(`certificate-${selectedCert.certificate_id}.pdf`);
+    } catch (err: any) {
+      toast(err?.message || 'Could not generate the certificate PDF. Please try again.', 'error');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (isLoading) {
@@ -115,9 +125,14 @@ export default function Certificates() {
                 </button>
                 <button
                   onClick={() => { setSelectedCert(cert); setTimeout(downloadPDF, 500); }}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors"
+                  disabled={downloading}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Download className="w-4 h-4" /> Download
+                  {downloading ? (
+                    <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Preparing…</>
+                  ) : (
+                    <><Download className="w-4 h-4" /> Download</>
+                  )}
                 </button>
               </div>
             </div>
@@ -134,12 +149,21 @@ export default function Certificates() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={downloadPDF}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors"
+                  disabled={downloading}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Download className="w-4 h-4" /> Download PDF
+                  {downloading ? (
+                    <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Preparing…</>
+                  ) : (
+                    <><Download className="w-4 h-4" /> Download PDF</>
+                  )}
                 </button>
-                <button onClick={() => setSelectedCert(null)} className="p-2 hover:bg-slate-100 rounded-lg">
-                  <X className="w-5 h-5 text-slate-500" />
+                <button
+                  onClick={() => setSelectedCert(null)}
+                  aria-label="Close certificate preview"
+                  className="p-2 text-slate-500 rounded-lg transition-colors hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1"
+                >
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -166,10 +190,10 @@ function AdminCertificateDesign({ cert, certRef }: { cert: Certificate; certRef:
       <div
         ref={certRef}
         className="w-[920px] h-[650px] bg-white relative overflow-hidden"
-        style={{ padding: '8px', background: '#1E3A8A' }}
+        style={{ padding: '8px', background: '#7F1D1D' }}
       >
         {/* Inner border (lighter blue) */}
-        <div className="w-full h-full relative overflow-hidden" style={{ border: '4px solid #3B82F6', background: '#ffffff' }}>
+        <div className="w-full h-full relative overflow-hidden" style={{ border: '4px solid #ED3237', background: '#ffffff' }}>
           {/* Watermark diagonal text */}
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
@@ -180,7 +204,7 @@ function AdminCertificateDesign({ cert, certRef }: { cert: Certificate; certRef:
                 transform: 'rotate(-35deg)',
                 fontSize: '120px',
                 fontWeight: 900,
-                color: '#3B82F6',
+                color: '#ED3237',
                 opacity: 0.04,
                 whiteSpace: 'nowrap',
                 letterSpacing: '20px',
@@ -197,14 +221,14 @@ function AdminCertificateDesign({ cert, certRef }: { cert: Certificate; certRef:
               <div className="w-14 h-14 bg-primary-800 rounded-xl flex items-center justify-center">
                 <GraduationCap className="w-8 h-8 text-white" />
               </div>
-              <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#1E3A8A' }}>Onboard LMS</h1>
+              <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#7F1D1D' }}>Leapswitch</h1>
             </div>
 
             {/* Gold divider */}
             <div className="w-40 h-1 mb-5" style={{ background: 'linear-gradient(90deg, transparent, #F59E0B, transparent)' }} />
 
             {/* Main heading */}
-            <h2 className="text-4xl font-extrabold mb-3 tracking-wide" style={{ color: '#1E3A8A', fontFamily: 'Georgia, serif' }}>
+            <h2 className="text-4xl font-extrabold mb-3 tracking-wide" style={{ color: '#7F1D1D', fontFamily: 'Georgia, serif' }}>
               CERTIFICATE OF COMPLETION
             </h2>
 
@@ -212,7 +236,7 @@ function AdminCertificateDesign({ cert, certRef }: { cert: Certificate; certRef:
 
             {/* Recipient name */}
             <div className="mb-3">
-              <h3 className="text-3xl font-bold" style={{ color: '#1E3A8A', fontFamily: 'Georgia, serif' }}>
+              <h3 className="text-3xl font-bold" style={{ color: '#7F1D1D', fontFamily: 'Georgia, serif' }}>
                 System Administrator
               </h3>
               <div className="mx-auto mt-1 h-0.5 w-72" style={{ background: '#CBD5E1' }} />
@@ -222,10 +246,10 @@ function AdminCertificateDesign({ cert, certRef }: { cert: Certificate; certRef:
 
             {/* Course name */}
             <div className="mb-3">
-              <p className="text-xl font-bold" style={{ color: '#1E3A8A' }}>
+              <p className="text-xl font-bold" style={{ color: '#7F1D1D' }}>
                 Sales Onboarding Training Programme
               </p>
-              <p className="text-lg font-semibold" style={{ color: '#1E3A8A' }}>
+              <p className="text-lg font-semibold" style={{ color: '#7F1D1D' }}>
                 Leapswitch Networks &amp; CloudPe
               </p>
             </div>
@@ -298,7 +322,7 @@ function StandardCertificateDesign({
       className="w-[800px] h-[560px] bg-white relative overflow-hidden"
       style={{
         background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)',
-        border: '12px solid #1E3A8A',
+        border: '12px solid #7F1D1D',
       }}
     >
       {/* Decorative corners */}
@@ -314,7 +338,7 @@ function StandardCertificateDesign({
             <GraduationCap className="w-8 h-8 text-white" />
           </div>
           <div className="text-left">
-            <h1 className="text-2xl font-bold text-primary-900">Onboard LMS</h1>
+            <h1 className="text-2xl font-bold text-primary-900">Leapswitch</h1>
             <p className="text-xs text-slate-500 tracking-widest uppercase">Certificate of Completion</p>
           </div>
         </div>

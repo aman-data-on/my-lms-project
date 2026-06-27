@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ArrowRight, ArrowLeft, Check, Zap, Trophy, Target,
+  ArrowRight, ArrowLeft, Check, CheckCircle2, Zap, Trophy, Target,
   ChevronRight, Lock, Menu, X,
   Building2, Cloud, Layers, Clock, Boxes, TrendingUp, Users, Share2,
   type LucideIcon,
 } from 'lucide-react';
 import { resolveBlockIcon } from './blocks/icons';
+import { VisualBlockRenderer } from './blocks/VisualBlockRenderer';
 import { TopicIllustration, type DiagramContent } from './course/TopicIllustration';
 import { safeHtml } from '../lib/sanitize';
 
@@ -36,6 +37,12 @@ export interface Module1ReaderProps {
   courseTree: NavPhase[];
   currentLessonIndex: number;
   onSelectModule: (lessonIndex: number) => void;
+  /** Exact resume target within this lesson (topic key) — restored on mount. */
+  resumeTopicKey?: string | null;
+  /** A topic scrolled into view (record visit / resume pointer). */
+  onTopicView?: (topicKey: string) => void;
+  /** A topic was scrolled past (reading completion). */
+  onTopicComplete?: (topicKey: string) => void;
   onBack: () => void;
   onMarkComplete: () => Promise<void> | void;
   onNextLesson: () => void;
@@ -69,7 +76,18 @@ function parseText(html: string): ParsedText {
 }
 
 const numbered = (heading: string) => heading.match(/^(\d+\.\d+)\s+(.*)/);
-const stripModulePrefix = (t: string) => t.replace(/^module\s+\d+\s*[—–-]\s*/i, '').trim() || t;
+export const stripModulePrefix = (t: string) => t.replace(/^module\s+\d+\s*[—–-]\s*/i, '').trim() || t;
+
+/**
+ * The module's learning objective — the "Goal:" line authored in the lesson's
+ * first text block (real DB content, never invented). Returns null when the
+ * module declares no goal so callers can omit it rather than fabricate copy.
+ */
+export function lessonObjective(videoUrl: string | null): string | null {
+  const b = parseBlocks(videoUrl).find((x) => x.type === 'text');
+  const goal = b ? parseText(b.data?.html || '').goal : null;
+  return goal ? goal.charAt(0).toUpperCase() + goal.slice(1) : null;
+}
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const wordCount = (html: string) => { const t = plain(html); return t ? t.split(' ').length : 0; };
 
@@ -208,9 +226,48 @@ function headIcon(block: Block): LucideIcon {
 // key_facts has no heading in this reader, but keep a sensible default available.
 const BarChartFallback = Boxes;
 
+// Visual block types (everything that isn't prose). A text "concept" is paired
+// with the visual block that immediately follows it into ONE section.
+const VISUAL_TYPES = new Set([
+  'timeline', 'comparison', 'ecosystem_diagram', 'process_flow', 'architecture_diagram',
+  'feature_benefit', 'use_case_cards', 'scenario_cards', 'data_visualization', 'key_facts',
+  'flashcard', 'knowledge_check',
+]);
+// Real, short labels pulled from a paired visual block — used to fill and
+// balance the left column of a side pair (a scannable index beside the detailed
+// card). Source labels only; nothing is invented.
+function keyPointsFor(b: Block): string[] {
+  const d: any = b.data || {};
+  let items: string[] = [];
+  if (b.type === 'feature_benefit') items = (d.pairs || []).map((p: any) => p?.feature);
+  else if (b.type === 'scenario_cards') items = (d.scenarios || []).map((s: any) => s?.recommended || s?.title);
+  else if (b.type === 'ecosystem_diagram') items = (d.nodes || []).map((n: any) => n?.label);
+  else if (b.type === 'use_case_cards') items = (d.cases || []).map((c: any) => c?.title);
+  return items.filter((s) => typeof s === 'string' && s.trim()).slice(0, 6);
+}
+
+// Vertical / list visuals that read well in the 45% column beside the text.
+// Grid- and width-hungry visuals (comparison, use_case grids, architecture,
+// process flow, timeline, …) instead get the text as a lead ABOVE a full-width
+// visual — matching the spec's "architecture / comparison → full width" rule.
+const PAIR_SIDE = new Set(['feature_benefit', 'scenario_cards', 'ecosystem_diagram']);
+
+// Semantic eyebrow icon for a module's generic hero, derived from its title so
+// each module still feels purpose-built (Module 1 keeps its bespoke hero).
+function moduleIcon(title: string): LucideIcon {
+  const t = title.toLowerCase();
+  if (t.includes('cloudpe')) return Cloud;
+  if (t.includes('market')) return TrendingUp;
+  if (t.includes('infrastructure') || t.includes('portfolio')) return Boxes;
+  if (t.includes('feature') || t.includes('benefit') || t.includes('value')) return Target;
+  if (t.includes('team') || t.includes('structure') || t.includes('internal')) return Users;
+  return Layers;
+}
+
 export function Module1Reader({
   lesson, course, courseProgressPercent, isCurrentCompleted, isCourseDone,
   courseTree, currentLessonIndex, onSelectModule,
+  resumeTopicKey, onTopicView, onTopicComplete,
   onBack, onMarkComplete, onNextLesson, onAssessment,
 }: Module1ReaderProps) {
   const blocks = useMemo(() => parseBlocks(lesson.video_url), [lesson.video_url]);
@@ -219,6 +276,22 @@ export function Module1Reader({
     const b = blocks.find((x) => x.type === 'text');
     return b ? parseText(b.data?.html || '').goal : null;
   }, [blocks]);
+
+  // Module 1 keeps its bespoke benchmark hero; every other Phase-1 module gets a
+  // generic, content-driven hero (same design language, adapted to its content).
+  const moduleNumber = currentLessonIndex + 1;
+  const isModule1 = currentLessonIndex === 0 && /company overview/i.test(lesson.title);
+  const HeroIcon = moduleIcon(lesson.title);
+  const heroLead = useMemo(() => {
+    if (firstGoal) return firstGoal.charAt(0).toUpperCase() + firstGoal.slice(1);
+    const b = blocks.find((x) => x.type === 'text');
+    const txt = b ? plain(parseText(b.data?.html || '').html) : '';
+    return txt.length > 220 ? `${txt.slice(0, 217).trimEnd()}…` : txt;
+  }, [firstGoal, blocks]);
+  const outlineSteps = useMemo(
+    () => activeTopics.filter((t) => t.id !== 'overview').slice(0, 4).map((t) => ({ label: t.title })),
+    [activeTopics],
+  );
 
   const currentPhaseName = useMemo(
     () => courseTree.find((p) => p.modules.some((m) => m.lessonIndex === currentLessonIndex))?.name,
@@ -262,6 +335,11 @@ export function Module1Reader({
       reveals.forEach((el) => ro.observe(el));
     }
 
+    // Actual rendered section order (every block renders a [data-topic]; this is
+    // a superset of activeTopics, which only lists headed/titled topics).
+    const sections = Array.from(root.querySelectorAll<HTMLElement>('[data-topic]'));
+    domTopicsRef.current = sections.map((el) => el.dataset.topic || '');
+
     const spy = new IntersectionObserver((es) => {
       es.forEach((e) => {
         if (e.isIntersecting) {
@@ -272,7 +350,7 @@ export function Module1Reader({
         }
       });
     }, { root: scroller, rootMargin: '-42% 0px -52% 0px' });
-    root.querySelectorAll<HTMLElement>('[data-topic]').forEach((el) => spy.observe(el));
+    sections.forEach((el) => spy.observe(el));
 
     return () => spy.disconnect();
   }, [activeTopics]);
@@ -281,6 +359,56 @@ export function Module1Reader({
   useEffect(() => {
     rootRef.current?.querySelector('.topic.is-active')?.scrollIntoView({ block: 'nearest' });
   }, [activeTopic]);
+
+  // ── Topic progress emission ───────────────────────────────────────────────
+  // Latest callbacks via ref so the spy/emit effects don't re-run on every render.
+  const cbRef = useRef({ onTopicView, onTopicComplete });
+  cbRef.current = { onTopicView, onTopicComplete };
+  const emittedComplete = useRef<Set<string>>(new Set());
+  const lastViewedRef = useRef<string>('');
+  const didResume = useRef(false);
+  const domTopicsRef = useRef<string[]>([]);
+
+  // Reset per-lesson session state when the lesson changes.
+  useEffect(() => {
+    emittedComplete.current = new Set();
+    lastViewedRef.current = '';
+    didResume.current = false;
+  }, [lesson.id]);
+
+  // As the active topic advances: record the view, and mark every topic the
+  // learner scrolled PAST as complete (reading = reached the end / moved on).
+  // The last topic completes via the explicit "Mark complete" action.
+  useEffect(() => {
+    const id = activeTopic;
+    if (!id) return;
+    if (lastViewedRef.current !== id) {
+      lastViewedRef.current = id;
+      cbRef.current.onTopicView?.(id);
+    }
+    // Mark every rendered section the learner scrolled PAST as complete, using
+    // the real DOM order so untitled sections (e.g. key_facts) aren't skipped.
+    const order = domTopicsRef.current;
+    const idx = order.indexOf(id);
+    for (let i = 0; i < idx; i++) {
+      const key = order[i];
+      if (key && !emittedComplete.current.has(key)) {
+        emittedComplete.current.add(key);
+        cbRef.current.onTopicComplete?.(key);
+      }
+    }
+  }, [activeTopic, activeTopics]);
+
+  // Restore the learner to their exact resume topic on mount.
+  useEffect(() => {
+    if (didResume.current) return;
+    if (!resumeTopicKey || resumeTopicKey === 'overview') { didResume.current = true; return; }
+    const el = rootRef.current?.querySelector<HTMLElement>(`[data-topic="${CSS.escape(resumeTopicKey)}"]`);
+    if (!el) return; // DOM not ready yet — retry on next activeTopics tick
+    didResume.current = true;
+    setActiveTopic(resumeTopicKey);
+    requestAnimationFrame(() => el.scrollIntoView({ block: 'start' }));
+  }, [resumeTopicKey, activeTopics]);
 
   const goToTopic = (id: string) => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -301,7 +429,7 @@ export function Module1Reader({
 
   const primaryLabel = !atLast
     ? `Next: ${activeTopics[activeIdx + 1]?.title || ''}`
-    : isCurrentCompleted ? (isCourseDone ? 'Take assessment' : 'Next module') : 'Mark complete & continue';
+    : isCurrentCompleted ? (isCourseDone ? 'Take assessment' : 'Next module') : 'Mark Module Complete';
 
   const onPrimary = async () => {
     if (!atLast) { goToTopic(activeTopics[activeIdx + 1].id); return; }
@@ -327,10 +455,11 @@ export function Module1Reader({
         const summary = t.summary && (
           <div className="summary split__summary"><span className="mono">Module summary</span><p>{t.summary}</p></div>
         );
-        // Short text (<20 words) reads in a centered column — never stretched and
-        // never padded with a decorative visual. Everything longer becomes a
-        // text + concept-illustration two-column so no topic is paragraph-only.
-        if (wordCount(t.html) < 20) {
+        // A bespoke, content-labelled diagram only (Module 1). NEVER a generic /
+        // inferred illustration — if there's no real diagram, the right column
+        // shows nothing and the text reads in a centered column.
+        const diagram = diagramForTopic(t.heading);
+        if (wordCount(t.html) < 20 || !diagram) {
           return (
             <section key={b.id} id={`sec-${b.id}`} data-topic={b.id} className="m1-sec m1-sec--read">
               {head}{prose}{summary}
@@ -341,7 +470,7 @@ export function Module1Reader({
           <section key={b.id} id={`sec-${b.id}`} data-topic={b.id} className="m1-sec m1-sec--split">
             <div className="split__main">{head}{prose}</div>
             <div className="split__aside">
-              <TopicIllustration tone="cool" content={diagramForTopic(t.heading)} title={m ? m[2] : t.heading} text={plain(t.html)} />
+              <TopicIllustration tone="cool" content={diagram} title={m ? m[2] : t.heading} text={plain(t.html)} />
             </div>
             {summary}
           </section>
@@ -468,9 +597,94 @@ export function Module1Reader({
           </section>
         );
       }
+      // Block types the Kinetic reader has no bespoke renderer for (comparison,
+      // process_flow, scenario_cards, flashcard, knowledge_check, data_visualization)
+      // are delegated to the shared, already-polished block components so every
+      // module renders its full content. They bring their own VisualShell header.
       default:
-        return null;
+        return (
+          <section key={b.id} id={`sec-${b.id}`} data-topic={b.id} className="m1-sec m1-sec--wide">
+            <VisualBlockRenderer block={b as any} surface="plain" lessonId={lesson.id} userId="" />
+          </section>
+        );
     }
+  };
+
+  // A text "concept" paired with the real visual block that follows it, in ONE
+  // section. Side-friendly visuals sit in the 45% column beside the text; wider
+  // visuals get the text as a lead above a full-width visual. Both the text and
+  // the visual keep their own data-topic anchor, so scroll-spy, the sidebar and
+  // topic-progress are unchanged. No generic art — only the real, labelled block.
+  const renderConcept = (tb: Block, t: ParsedText, vb: Block) => {
+    const m = numbered(t.heading);
+    const HIcon = headIcon(tb);
+    const head = t.heading && (
+      <div className="sec-head">
+        <span className="eyebrow mono eyebrow--ic"><HIcon size={14} strokeWidth={2.2} aria-hidden="true" />{m ? `Topic ${m[1]}` : 'In focus'}</span>
+        <h2>{m ? m[2] : t.heading}</h2>
+      </div>
+    );
+    const prose = t.html && <div className="prose" dangerouslySetInnerHTML={{ __html: safeHtml(t.html) }} />;
+    const summary = t.summary && (
+      <div className="summary split__summary"><span className="mono">Module summary</span><p>{t.summary}</p></div>
+    );
+    const visual = (
+      <div id={`sec-${vb.id}`} data-topic={vb.id} className="pair__visual" style={{ scrollMarginTop: 24 }}>
+        <VisualBlockRenderer block={vb as any} surface="plain" lessonId={lesson.id} userId="" />
+      </div>
+    );
+
+    if (PAIR_SIDE.has(vb.type)) {
+      // Fill + vertically balance the short left column against the taller visual
+      // with a "Key points" index built from the visual's REAL labels.
+      const points = keyPointsFor(vb);
+      return (
+        <section key={tb.id} className="m1-sec m1-sec--split m1-sec--pair">
+          <div className="split__main" id={`sec-${tb.id}`} data-topic={tb.id}>
+            <div className="pair__intro">{head}{prose}</div>
+            {points.length >= 3 && (
+              <div className="keypoints">
+                <span className="keypoints__k mono">Key points</span>
+                <ul>
+                  {points.map((p, i) => (
+                    <li key={i}><CheckCircle2 size={15} aria-hidden="true" /><span>{p}</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <div className="split__aside">{visual}</div>
+          {summary}
+        </section>
+      );
+    }
+    return (
+      <section key={tb.id} className="m1-sec m1-sec--wide pair">
+        <div className="pair__lead" id={`sec-${tb.id}`} data-topic={tb.id}>{head}{prose}</div>
+        {visual}
+        {summary}
+      </section>
+    );
+  };
+
+  // Walk the blocks, pairing each text concept with the visual that follows it.
+  // Module 1 keeps its bespoke per-block rendering (the benchmark, untouched).
+  const renderBlocks = () => {
+    const out: ReactNode[] = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      if (!isModule1 && b.type === 'text') {
+        const t = parseText(b.data?.html || '');
+        const next = blocks[i + 1];
+        if (next && VISUAL_TYPES.has(next.type)) {
+          out.push(renderConcept(b, t, next));
+          i++; // consume the paired visual
+          continue;
+        }
+      }
+      out.push(renderBlock(b));
+    }
+    return out;
   };
 
   // ─── Sidebar: topic status within a module ──────────────────────────────────
@@ -510,15 +724,23 @@ export function Module1Reader({
               const done = phase.modules.filter((m) => m.completed).length;
               const open = expandedPhases.has(phase.name);
               const isCurrentPhase = phase.name === currentPhaseName;
+              const phaseLocked = !phase.modules.some((m) => m.accessible);
               return (
                 <div className="ph" key={phase.name}>
-                  <button className={`ph__head${isCurrentPhase ? ' is-current' : ''}`} onClick={() => togglePhase(phase.name)} aria-expanded={open}>
+                  <button
+                    className={`ph__head${isCurrentPhase ? ' is-current' : ''}`}
+                    onClick={() => togglePhase(phase.name)}
+                    aria-expanded={open}
+                    title={phaseLocked ? `Complete Phase ${pi} to unlock` : undefined}
+                  >
                     <ChevronRight className={`chev${open ? ' open' : ''}`} size={15} />
                     <span className="ph__txt">
                       <span className="ph__kicker mono">Phase {pi + 1}</span>
                       <span className="ph__name">{phase.name}</span>
                     </span>
-                    <span className="ph__count mono">{done}/{total}</span>
+                    {phaseLocked
+                      ? <Lock size={13} className="ph__lock" aria-label="Locked" />
+                      : <span className="ph__count mono">{done}/{total}</span>}
                   </button>
                   <div className="ph__bar"><span style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></div>
 
@@ -532,7 +754,13 @@ export function Module1Reader({
                           const tDone = mod.completed ? topics.length : isCurrentMod ? Math.min(topics.length, maxReached + 1) : 0;
                           return (
                             <div className={`mod${isCurrentMod ? ' is-current' : ''}`} key={mod.id}>
-                              <button className="mod__head" onClick={() => toggleModule(mod.lessonIndex)} aria-expanded={mOpen} disabled={!mod.accessible}>
+                              <button
+                                className="mod__head"
+                                onClick={() => toggleModule(mod.lessonIndex)}
+                                aria-expanded={mOpen}
+                                disabled={!mod.accessible}
+                                title={!mod.accessible ? `Complete Module ${mod.lessonIndex} to unlock` : undefined}
+                              >
                                 <ChevronRight className={`chev${mOpen ? ' open' : ''}`} size={14} />
                                 <span className="mod__title">{mod.title}</span>
                                 <span className="mod__status" aria-hidden="true">
@@ -555,8 +783,13 @@ export function Module1Reader({
                                         <li key={tp.id}>
                                           <button
                                             className={`topic is-${st}${isCurrentMod && tp.id === activeTopic ? ' is-active' : ''}`}
-                                            onClick={() => { isCurrentMod ? goToTopic(tp.id) : onSelectModule(mod.lessonIndex); setDrawerOpen(false); }}
+                                            onClick={() => {
+                                              if (isCurrentMod) goToTopic(tp.id);
+                                              else if (mod.accessible) onSelectModule(mod.lessonIndex);
+                                              setDrawerOpen(false);
+                                            }}
                                             disabled={st === 'locked'}
+                                            title={st === 'locked' ? `Complete Module ${mod.lessonIndex} to unlock` : undefined}
                                             aria-current={isCurrentMod && tp.id === activeTopic ? 'true' : undefined}
                                           >
                                             <span className="topic__mark" aria-hidden="true">
@@ -605,41 +838,67 @@ export function Module1Reader({
 
           <div className="scroll" ref={scrollRef}>
             <main className="stage">
-              <section id="sec-overview" data-topic="overview" className="hero">
-                <div className="hero__grid">
-                  <div className="hero__inner">
-                    <span className="eyebrow mono eyebrow--ic"><Building2 size={14} strokeWidth={2.2} aria-hidden="true" />Module 01 · Company Overview</span>
-                    <h1>The infrastructure company <em>behind the cloud you sell.</em></h1>
-                    <p className="hero__lead">
-                      Leapswitch Networks builds and runs the infrastructure; CloudPe is the cloud platform
-                      customers actually use. Know both, and you can explain who we are in one confident sentence.
-                    </p>
-                    <div className="stats">
-                      <div className="stat"><div className="stat__v">2006</div><div className="stat__l">Founded</div><div className="stat__s">nearly two decades</div></div>
-                      <div className="stat"><div className="stat__v">22,000+</div><div className="stat__l">Customers</div><div className="stat__s">served globally</div></div>
-                      <div className="stat"><div className="stat__v">India</div><div className="stat__l">Hosted</div><div className="stat__s">data sovereignty</div></div>
-                    </div>
-                    {firstGoal && (
-                      <div className="goal">
-                        <span className="goal__ic"><Target size={20} /></span>
-                        <div>
-                          <span className="goal__k mono">Your goal</span>
-                          <p>{firstGoal.charAt(0).toUpperCase() + firstGoal.slice(1)}</p>
+              {isModule1 ? (
+                <section id="sec-overview" data-topic="overview" className="hero">
+                  <div className="hero__grid">
+                    <div className="hero__inner">
+                      <span className="eyebrow mono eyebrow--ic"><Building2 size={14} strokeWidth={2.2} aria-hidden="true" />Module 01 · Company Overview</span>
+                      <h1>The infrastructure company <em>behind the cloud you sell.</em></h1>
+                      <p className="hero__lead">
+                        Leapswitch Networks builds and runs the infrastructure; CloudPe is the cloud platform
+                        customers actually use. Know both, and you can explain who we are in one confident sentence.
+                      </p>
+                      <div className="stats">
+                        <div className="stat"><div className="stat__v">2006</div><div className="stat__l">Founded</div><div className="stat__s">nearly two decades</div></div>
+                        <div className="stat"><div className="stat__v">22,000+</div><div className="stat__l">Customers</div><div className="stat__s">served globally</div></div>
+                        <div className="stat"><div className="stat__v">India</div><div className="stat__l">Hosted</div><div className="stat__s">data sovereignty</div></div>
+                      </div>
+                      {firstGoal && (
+                        <div className="goal">
+                          <span className="goal__ic"><Target size={20} /></span>
+                          <div>
+                            <span className="goal__k mono">Your goal</span>
+                            <p>{firstGoal.charAt(0).toUpperCase() + firstGoal.slice(1)}</p>
+                          </div>
                         </div>
+                      )}
+                    </div>
+                    <div className="hero__aside">
+                      <TopicIllustration tone="cool" title={moduleTitle} content={{ shape: 'flow', steps: [
+                        { label: 'Leapswitch', sub: 'builds & runs the infrastructure' },
+                        { label: 'CloudPe', sub: 'the cloud platform on top' },
+                        { label: 'Customers', sub: 'run & scale their workloads' },
+                      ] }} />
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <section id="sec-overview" data-topic="overview" className={`hero${outlineSteps.length === 0 ? ' hero--solo' : ''}`}>
+                  <div className="hero__grid">
+                    <div className="hero__inner">
+                      <span className="eyebrow mono eyebrow--ic"><HeroIcon size={14} strokeWidth={2.2} aria-hidden="true" />Module {String(moduleNumber).padStart(2, '0')}{currentPhaseName ? ` · ${currentPhaseName.replace(/^Phase\s+\d+\s*[—–-]\s*/i, '')}` : ''}</span>
+                      <h1>{moduleTitle}</h1>
+                      {heroLead && <p className="hero__lead">{heroLead}</p>}
+                      {firstGoal && (
+                        <div className="goal">
+                          <span className="goal__ic"><Target size={20} /></span>
+                          <div>
+                            <span className="goal__k mono">Your goal</span>
+                            <p>{firstGoal.charAt(0).toUpperCase() + firstGoal.slice(1)}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {outlineSteps.length > 0 && (
+                      <div className="hero__aside">
+                        <TopicIllustration tone="cool" title={moduleTitle} content={{ shape: 'flow', steps: outlineSteps }} />
                       </div>
                     )}
                   </div>
-                  <div className="hero__aside">
-                    <TopicIllustration tone="cool" title={moduleTitle} content={{ shape: 'flow', steps: [
-                      { label: 'Leapswitch', sub: 'builds & runs the infrastructure' },
-                      { label: 'CloudPe', sub: 'the cloud platform on top' },
-                      { label: 'Customers', sub: 'run & scale their workloads' },
-                    ] }} />
-                  </div>
-                </div>
-              </section>
+                </section>
+              )}
 
-              {blocks.map((b) => renderBlock(b))}
+              {renderBlocks()}
 
               <nav className="lessonnav" aria-label="Lesson navigation">
                 <button className="btn btn--ghost" disabled={activeIdx <= 0}
@@ -718,6 +977,7 @@ const M1_CSS = `
 .m1k .ph__head.is-current .ph__kicker{color:var(--m1-accent-2);}
 .m1k .ph__name{font-size:13px;font-weight:600;line-height:1.25;color:#fff;}
 .m1k .ph__count{font-size:10.5px;color:var(--inverse-dim);flex-shrink:0;}
+.m1k .ph__lock{flex-shrink:0;color:var(--inverse-dim);}
 .m1k .ph__bar{height:3px;border-radius:var(--r-pill);background:#39424a;margin:0 10px 2px;overflow:hidden;}
 .m1k .ph__bar>span{display:block;height:100%;background:var(--m1-accent);border-radius:var(--r-pill);transition:width .4s;}
 .m1k .chev{flex-shrink:0;color:var(--inverse-dim);transition:transform .2s;}
@@ -806,6 +1066,23 @@ const M1_CSS = `
 
 .m1k .hero{padding:48px 0 8px;position:relative;scroll-margin-top:24px;max-width:var(--w-wide);}
 .m1k .hero__grid{display:grid;grid-template-columns:minmax(0,55fr) minmax(0,45fr);gap:48px;align-items:center;}
+.m1k .hero--solo .hero__grid{grid-template-columns:minmax(0,820px);}
+/* Paired concept = text lead (readable measure) above a full-width real visual.
+   The text reads at a comfortable width; the visual fills the row below it — no
+   empty right-hand gutter, no decorative filler. */
+.m1k .pair__lead{max-width:var(--w-read);margin-bottom:24px;}
+.m1k .pair__visual{width:100%;min-width:0;}
+.m1k .m1-sec--split .pair__visual{margin:0;}
+/* Side pair: stretch the left column to the visual's height and centre its
+   content (intro + key-points) so the two columns read as balanced, never
+   "one tall, one short". Scoped to --pair so Module 1's splits are untouched. */
+.m1k .m1-sec--pair{align-items:stretch;}
+.m1k .m1-sec--pair .split__main{display:flex;flex-direction:column;justify-content:center;gap:24px;}
+.m1k .keypoints{border-top:1px solid var(--outline);padding-top:18px;}
+.m1k .keypoints__k{display:block;color:var(--m1-accent);font-size:11px;margin-bottom:12px;}
+.m1k .keypoints ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px;}
+.m1k .keypoints li{display:flex;align-items:flex-start;gap:10px;font-size:15px;font-weight:500;color:#27313a;line-height:1.4;}
+.m1k .keypoints li svg{color:var(--m1-accent);flex-shrink:0;margin-top:1px;}
 .m1k .hero__aside{width:100%;min-width:0;}
 .m1k .hero__dots{position:absolute;inset:0;background-image:radial-gradient(var(--surface-highest) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:linear-gradient(180deg,#000,transparent 70%);mask-image:linear-gradient(180deg,#000,transparent 70%);opacity:.55;pointer-events:none;}
 .m1k .hero__inner{position:relative;}
@@ -870,7 +1147,7 @@ const M1_CSS = `
 .m1k .eco__rel{margin-top:16px;background:var(--surface-low);border:1px dashed var(--outline-warm);border-radius:var(--r-lg);padding:14px 16px;font-size:14px;color:#2c3640;line-height:1.55;max-width:680px;}
 
 .m1k .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;}
-.m1k .uc{background:var(--surface);border:1px solid var(--outline);border-radius:var(--r-xl);padding:22px;transition:border-color .15s,transform .15s;}
+.m1k .uc{background:var(--surface);border:1px solid var(--outline);border-radius:var(--r-xl);padding:22px;transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease;}
 .m1k .uc:hover{border-color:var(--outline-warm);transform:translateY(-2px);}
 .m1k .uc__top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .m1k .uc__ic{width:40px;height:40px;border-radius:var(--r-lg);display:grid;place-items:center;color:#fff;}
@@ -891,6 +1168,70 @@ const M1_CSS = `
 .m1k .btn--primary:hover{background:#9d0d24;}
 .m1k .btn--primary[disabled]{opacity:.7;cursor:default;}
 
+/* ── Interaction states (clear at a glance, not noisy; ~200ms hover, 100ms press;
+   movement removed under prefers-reduced-motion at the foot of this sheet).
+   PRINCIPLE: hover is reserved for interactive or genuinely card-like things.
+   Pure KPI/number readouts — .stat, .fact, .chip — stay STATIC so hover never
+   falsely implies they are clickable. ── */
+.m1k .rail__brand,.m1k .rail__close,.m1k .menu-btn{transition:background .2s ease,color .2s ease,border-color .2s ease,transform .12s ease,box-shadow .2s ease;}
+.m1k .rail__brand:hover{background:rgba(255,255,255,.05);}
+.m1k .rail__brand:active{transform:translateY(.5px);}
+.m1k .rail__close:hover{background:rgba(255,255,255,.12);}
+.m1k .rail__close:active{transform:scale(.94);}
+.m1k .menu-btn:hover{background:var(--surface-low);border-color:var(--m1-accent);color:var(--m1-accent);box-shadow:0 4px 12px -6px rgba(183,16,42,.3);}
+.m1k .menu-btn:active{transform:scale(.95);transition-duration:.1s;}
+
+/* phase + module accordion heads — multi-property, distinct from selected */
+.m1k .ph__head,.m1k .mod__head{transition:background .2s ease,color .2s ease,transform .12s ease;}
+.m1k .ph__head:hover{background:rgba(255,255,255,.07);}
+.m1k .ph__head:hover .chev{color:#fff;}
+.m1k .ph__head:active{transform:translateY(.5px);}
+.m1k .ph__head.is-current{background:rgba(255,255,255,.05);}
+.m1k .mod__head:not(:disabled):hover{background:rgba(255,255,255,.07);color:#fff;}
+.m1k .mod__head:not(:disabled):hover .chev{color:#fff;}
+.m1k .mod__head:not(:disabled):active{transform:translateY(.5px);transition-duration:.1s;}
+.m1k .mod.is-current>.mod__head{background:rgba(255,255,255,.045);}
+
+/* topics — hover reads CLEARLY different from the active row (slide + brighten,
+   no accent bar), while active stays dominant (brighter bg + red bar) even when
+   the cursor leaves it */
+.m1k .topic{transition:background .2s ease,color .2s ease,transform .14s ease;}
+.m1k .topic:not(.is-active):not(:disabled):hover{background:rgba(255,255,255,.07);color:#fff;transform:translateX(3px);}
+.m1k .topic:not(.is-active):not(:disabled):hover .topic__mark{color:#fff;}
+.m1k .topic:not(:disabled):active{transform:translateX(1px);transition-duration:.1s;}
+.m1k .topic.is-active{background:rgba(255,255,255,.11);}
+.m1k .topic.is-active::before{width:3px;}
+.m1k .topic:disabled:hover{background:transparent;transform:none;}
+
+/* content & stack cards (use-case / feature / ecosystem / architecture-stack
+   layers — e.g. "One Provider, Full Stack" + "What CloudPe Offers") — tangible:
+   lift 3px + accent border + deeper accent-tinted shadow + faint tint + icon grows */
+.m1k .uc,.m1k .fbrow,.m1k .eco__node,.m1k .layer{transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease,background .2s ease;}
+.m1k .uc{box-shadow:0 1px 2px rgba(20,29,35,.05);}
+.m1k .uc:hover,.m1k .eco__node:hover,.m1k .layer:hover{border-color:rgba(183,16,42,.5);background:#fdf6f6;transform:translateY(-3px);box-shadow:0 18px 38px -20px rgba(183,16,42,.45);}
+.m1k .fbrow:hover{border-color:rgba(183,16,42,.5);background:#fdf6f6;transform:translateY(-3px);box-shadow:-3px 0 0 0 var(--m1-accent),0 18px 38px -20px rgba(183,16,42,.45);}
+.m1k .uc:active,.m1k .fbrow:active,.m1k .eco__node:active,.m1k .layer:active{transform:translateY(-1px);box-shadow:0 6px 14px -8px rgba(183,16,42,.35);transition-duration:.1s;}
+.m1k .uc__ic,.m1k .fbrow__ic,.m1k .eco__ic{transition:transform .2s ease;}
+.m1k .uc:hover .uc__ic,.m1k .fbrow:hover .fbrow__ic,.m1k .eco__node:hover .eco__ic{transform:scale(1.1);}
+.m1k .layer__tick{transition:transform .2s ease;}
+.m1k .layer:hover .layer__tick{transform:scaleY(1.15);}
+
+/* growth-timeline milestone rows — row tints, node pulses out, title accents */
+.m1k .timeline .tl{margin:0 -12px;padding-left:12px;padding-right:12px;border-radius:10px;transition:background .2s ease;}
+.m1k .tl__node{transition:transform .2s ease,box-shadow .2s ease,background .2s ease;}
+.m1k .tl__t{transition:color .2s ease;}
+.m1k .timeline .tl:hover{background:#fdf6f6;}
+.m1k .timeline .tl:hover .tl__node{transform:scale(1.18);background:var(--m1-accent);box-shadow:0 0 0 4px var(--ground),0 0 0 6px rgba(183,16,42,.18);}
+.m1k .timeline .tl:hover .tl__t{color:var(--m1-accent);}
+
+/* buttons: ghost gains a real hover + lift, primary lifts with a deeper glow;
+   both settle (and drop their shadow) quickly on press */
+.m1k .btn{transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,transform .12s ease,color .2s ease;}
+.m1k .btn--ghost:hover{background:var(--surface-low);border-color:var(--m1-accent);color:var(--text);box-shadow:0 6px 16px -10px rgba(20,29,35,.4);transform:translateY(-1px);}
+.m1k .btn--ghost:not([disabled]):active{transform:translateY(0);box-shadow:none;transition-duration:.1s;}
+.m1k .btn--primary:not([disabled]):hover{background:#9d0d24;box-shadow:0 8px 20px rgba(183,16,42,.42);transform:translateY(-2px);}
+.m1k .btn--primary:not([disabled]):active{transform:translateY(0);box-shadow:0 1px 5px rgba(183,16,42,.3);transition-duration:.1s;}
+
 @media (max-width:980px){
   .m1k .app{grid-template-columns:1fr;}
   .m1k .rail{position:fixed;top:0;left:0;height:100%;width:300px;max-width:86vw;z-index:80;transform:translateX(-100%);transition:transform .25s ease;}
@@ -910,5 +1251,12 @@ const M1_CSS = `
   .m1k .reveal{opacity:1;transform:none;transition:none;}
   .m1k .scroll{scroll-behavior:auto;}
   .m1k .acc,.m1k .rail{transition:none;}
+  /* keep colour/border/shadow affordances, drop the movement */
+  .m1k .uc,.m1k .fbrow,.m1k .eco__node,.m1k .layer,.m1k .btn,.m1k .topic,.m1k .mod__head,.m1k .ph__head,.m1k .uc__ic,.m1k .fbrow__ic,.m1k .eco__ic,.m1k .layer__tick,.m1k .tl__node{transition-property:background,border-color,box-shadow,color;}
+  .m1k .uc:hover,.m1k .fbrow:hover,.m1k .eco__node:hover,.m1k .layer:hover,
+  .m1k .uc:hover .uc__ic,.m1k .fbrow:hover .fbrow__ic,.m1k .eco__node:hover .eco__ic,
+  .m1k .layer:hover .layer__tick,.m1k .timeline .tl:hover .tl__node,
+  .m1k .btn--primary:not([disabled]):hover,.m1k .btn--ghost:hover,
+  .m1k .topic:not(.is-active):not(:disabled):hover,.m1k .topic:not(:disabled):active{transform:none;}
 }
 `;

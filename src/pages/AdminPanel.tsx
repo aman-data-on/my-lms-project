@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { setUsers as setReportUsers, setCourses as setReportCourses } from '../lib/reportData';
+import { useToast } from '../contexts/ToastContext';
 import {
   Shield, BookOpen, Users, ClipboardCheck, Plus, Edit3, Trash2, Eye, EyeOff,
   Search,
@@ -49,6 +50,7 @@ const DEPARTMENTS = ['HR', 'IT', 'Finance', 'Sales', 'Operations', 'Management']
 
 export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, data?: any) => void }) {
   const { isAdmin, user: currentUser } = useAuth();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'courses' | 'users' | 'assessments'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
@@ -93,14 +95,19 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
 
   const handleDeleteCourse = async (id: string) => {
     if (!confirm('Are you sure you want to delete this course? This will also delete all lessons.')) return;
-    await supabase.from('lessons').delete().eq('course_id', id);
-    await supabase.from('courses').delete().eq('id', id);
+    const { error: lessonsErr } = await supabase.from('lessons').delete().eq('course_id', id);
+    if (lessonsErr) { toast(lessonsErr.message || 'Failed to delete the course.', 'error'); return; }
+    const { error: courseErr } = await supabase.from('courses').delete().eq('id', id);
+    if (courseErr) { toast(courseErr.message || 'Failed to delete the course.', 'error'); return; }
+    toast('Course deleted.', 'success');
     fetchAll();
   };
 
   const handleToggleStatus = async (course: Course) => {
     const newStatus = course.status === 'published' ? 'draft' : 'published';
-    await supabase.from('courses').update({ status: newStatus }).eq('id', course.id);
+    const { error } = await supabase.from('courses').update({ status: newStatus }).eq('id', course.id);
+    if (error) { toast(error.message || 'Failed to update course status.', 'error'); return; }
+    toast(`Course ${newStatus === 'published' ? 'published' : 'moved to draft'}.`, 'success');
     fetchAll();
   };
 
@@ -110,8 +117,11 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
 
   const handleDeleteAssessment = async (id: string) => {
     if (!confirm('Delete this assessment and all its questions?')) return;
-    await supabase.from('questions').delete().eq('assessment_id', id);
-    await supabase.from('assessments').delete().eq('id', id);
+    const { error: qErr } = await supabase.from('questions').delete().eq('assessment_id', id);
+    if (qErr) { toast(qErr.message || 'Failed to delete the assessment.', 'error'); return; }
+    const { error: aErr } = await supabase.from('assessments').delete().eq('id', id);
+    if (aErr) { toast(aErr.message || 'Failed to delete the assessment.', 'error'); return; }
+    toast('Assessment deleted.', 'success');
     fetchAll();
   };
 
@@ -144,53 +154,69 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
   };
 
   const handleSaveUser = async () => {
-    if (!userForm.full_name || !userForm.email || (!editingUser && !userForm.password)) return;
+    if (!userForm.full_name || !userForm.email || (!editingUser && !userForm.password)) {
+      toast(`Please fill in name, email${editingUser ? '' : ' and password'}.`, 'warning');
+      return;
+    }
 
     const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
 
-    if (editingUser) {
-      // Update existing user
-      await supabase.from('profiles').update({
-        full_name: userForm.full_name,
-        employee_id: userForm.employee_id,
-        department: userForm.department,
-        job_title: userForm.job_title,
-        role: userForm.role,
-      }).eq('id', editingUser.id);
-
-      if (userForm.password) {
-        // Update password via edge function
-        await fetch(`${supabaseUrl}/functions/v1/seed-users`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: editingUser.email,
-            password: userForm.password,
-            updateOnly: true,
-          }),
-        });
-      }
-    } else {
-      // Create new user via edge function
-      const res = await fetch(`${supabaseUrl}/functions/v1/seed-users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: userForm.email,
-          password: userForm.password,
+    try {
+      if (editingUser) {
+        // Update existing user
+        const { error: profErr } = await supabase.from('profiles').update({
           full_name: userForm.full_name,
           employee_id: userForm.employee_id,
           department: userForm.department,
           job_title: userForm.job_title,
           role: userForm.role,
-          createNew: true,
-        }),
-      });
-      const result = await res.json();
-      if (!result.ok) {
-        alert('Failed to create user: ' + (result.error || 'Unknown error'));
-        return;
+        }).eq('id', editingUser.id);
+        if (profErr) { toast(profErr.message || 'Failed to update the user.', 'error'); return; }
+
+        if (userForm.password) {
+          // Update password via edge function
+          const res = await fetch(`${supabaseUrl}/functions/v1/seed-users`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: editingUser.email,
+              password: userForm.password,
+              updateOnly: true,
+            }),
+          });
+          const result = await res.json();
+          if (!result.ok) {
+            toast('Profile saved, but the password update failed: ' + (result.error || 'Unknown error'), 'error');
+            return;
+          }
+        }
+        toast('User updated.', 'success');
+      } else {
+        // Create new user via edge function
+        const res = await fetch(`${supabaseUrl}/functions/v1/seed-users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userForm.email,
+            password: userForm.password,
+            full_name: userForm.full_name,
+            employee_id: userForm.employee_id,
+            department: userForm.department,
+            job_title: userForm.job_title,
+            role: userForm.role,
+            createNew: true,
+          }),
+        });
+        const result = await res.json();
+        if (!result.ok) {
+          toast('Failed to create user: ' + (result.error || 'Unknown error'), 'error');
+          return;
+        }
+        toast('User created.', 'success');
       }
+    } catch (err: any) {
+      toast(err?.message || 'Could not save the user. Please try again.', 'error');
+      return;
     }
 
     setShowUserForm(false);
@@ -200,13 +226,15 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
 
   const handleDeleteUser = async (userId: string) => {
     if (currentUser?.id === userId) {
-      alert('You cannot delete your own account.');
+      toast('You cannot delete your own account.', 'warning');
       return;
     }
     if (!confirm('Are you sure you want to remove this user?')) return;
 
     // Delete profile
-    await supabase.from('profiles').delete().eq('id', userId);
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    if (error) { toast(error.message || 'Failed to remove the user.', 'error'); return; }
+    toast('User removed.', 'success');
     fetchAll();
   };
 
@@ -290,7 +318,7 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
             </div>
             <button
               onClick={() => onNavigate('course-builder')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900"
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800"
             >
               <Plus className="w-4 h-4" /> Add New Course
             </button>
@@ -361,7 +389,7 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => onNavigate('course-detail', { courseId: course.id })}
+                            onClick={() => onNavigate('course-detail', { courseId: course.id, courseTitle: course.title })}
                             className="p-2 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
                             title="Preview"
                           >
@@ -397,7 +425,7 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
             </p>
             <button
               onClick={() => { resetUserForm(); setShowUserForm(true); }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900"
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800"
             >
               <Plus className="w-4 h-4" /> Add User
             </button>
@@ -477,7 +505,7 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
             <h3 className="text-lg font-semibold text-slate-800">All Assessments</h3>
             <button
               onClick={() => onNavigate('assessments')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900"
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800"
             >
               <Plus className="w-4 h-4" /> Create Assessment
             </button>
@@ -624,7 +652,7 @@ export default function AdminPanel({ onNavigate }: { onNavigate: (page: string, 
                 </button>
                 <button
                   onClick={handleSaveUser}
-                  className="px-5 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 flex items-center gap-2"
+                  className="px-5 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 flex items-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" /> Save
                 </button>

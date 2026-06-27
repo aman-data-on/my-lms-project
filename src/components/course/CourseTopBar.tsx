@@ -18,7 +18,7 @@ export function CourseTopBar({
       <button
         onClick={onMenu}
         aria-label="Open module menu"
-        className="lg:hidden flex-shrink-0 w-9 h-9 rounded-lg border border-[#E6E5E0] flex items-center justify-center text-[#5E555A] hover:bg-[#F2F1ED] transition-colors"
+        className="lg:hidden flex-shrink-0 w-9 h-9 rounded-lg border border-[#E6E5E0] flex items-center justify-center text-[#5E555A] hover:bg-[#F2F1ED] active:scale-95 transition-[background-color,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:active:scale-100"
       >
         <Menu className="w-5 h-5" />
       </button>
@@ -39,13 +39,13 @@ export function CourseTopBar({
 
         {/* Account actions */}
         <div className="flex items-center gap-1">
-          <button aria-label="Help" className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-[#6B6E76] hover:bg-[#F2F1ED] transition-colors">
+          <button aria-label="Help" className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-[#6B6E76] hover:bg-[#F2F1ED] active:scale-95 transition-[background-color,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:active:scale-100">
             <HelpCircle className="w-5 h-5" />
           </button>
-          <button aria-label="Notifications" className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-[#6B6E76] hover:bg-[#F2F1ED] transition-colors">
+          <button aria-label="Notifications" className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-[#6B6E76] hover:bg-[#F2F1ED] active:scale-95 transition-[background-color,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:active:scale-100">
             <Bell className="w-5 h-5" />
           </button>
-          <button aria-label="Account" className="flex items-center gap-1 pl-1 rounded-lg hover:bg-[#F2F1ED] transition-colors py-1 pr-1.5">
+          <button aria-label="Account" className="flex items-center gap-1 pl-1 rounded-lg hover:bg-[#F2F1ED] active:scale-95 transition-[background-color,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:active:scale-100 py-1 pr-1.5">
             <span className="w-8 h-8 rounded-full flex items-center justify-center text-white" style={{ background: ACCENT }} aria-hidden="true">
               <User className="w-4 h-4" />
             </span>

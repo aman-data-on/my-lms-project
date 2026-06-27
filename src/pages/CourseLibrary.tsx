@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchCourseLibrary, enrollInCourse } from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
 import {
   Search, BookOpen, Clock, ChevronDown, Play,
   CheckCircle2, Circle
@@ -41,10 +42,16 @@ export default function CourseLibrary({ onNavigate }: { onNavigate: (page: strin
   const courses: Course[] = data?.courses ?? [];
   const enrollments: Enrollment[] = data?.enrollments ?? [];
 
+  const { toast } = useToast();
   const enrollMutation = useMutation({
     mutationFn: ({ courseId, courseTitle }: { courseId: string; courseTitle: string }) =>
       enrollInCourse(user!.id, courseId, courseTitle),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['course-library', user?.id] }),
+    onSuccess: (_data, { courseTitle }) => {
+      queryClient.invalidateQueries({ queryKey: ['course-library', user?.id] });
+      toast(`Enrolled in ${courseTitle}`, 'success');
+    },
+    onError: (err: any) =>
+      toast(err?.message || 'Could not enroll in this course. Please try again.', 'error'),
   });
 
   const getEnrollment = (courseId: string) => enrollments.find(e => e.course_id === courseId);
@@ -160,7 +167,7 @@ export default function CourseLibrary({ onNavigate }: { onNavigate: (page: strin
                         <span className="font-medium text-primary-700">{enrollment.progress_percent}%</span>
                       </div>
                       <div className="w-full bg-slate-100 rounded-full h-1.5">
-                        <div className="bg-primary-500 rounded-full h-1.5 transition-all" style={{ width: `${enrollment.progress_percent}%` }} />
+                        <div className="bg-primary-600 rounded-full h-1.5 transition-all" style={{ width: `${enrollment.progress_percent}%` }} />
                       </div>
                     </div>
                   )}
@@ -176,9 +183,17 @@ export default function CourseLibrary({ onNavigate }: { onNavigate: (page: strin
                     {status === 'Not Started' && !isAdmin ? (
                       <button
                         onClick={() => handleEnroll(course.id)}
-                        className="px-4 py-1.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors"
+                        disabled={enrollMutation.isPending && enrollMutation.variables?.courseId === course.id}
+                        className="px-4 py-1.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
                       >
-                        Enroll
+                        {enrollMutation.isPending && enrollMutation.variables?.courseId === course.id ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                            Enrolling…
+                          </>
+                        ) : (
+                          'Enroll'
+                        )}
                       </button>
                     ) : (
                       <button

@@ -129,6 +129,7 @@ export function CourseIndex({
                   : isCompletePhase
                   ? 'border-green-100'
                   : 'border-slate-200',
+                unlocked && 'transition-shadow duration-200 hover:shadow-md',
                 !unlocked && 'opacity-60',
               )}
             >
@@ -140,18 +141,26 @@ export function CourseIndex({
                 aria-disabled={!unlocked || undefined}
                 aria-controls={panelId}
                 className={cn(
-                  'w-full flex items-center gap-3 px-5 py-4 text-left min-h-[64px] transition-colors',
+                  'w-full flex items-center gap-3 px-5 py-4 text-left min-h-[64px] transition-[background-color,transform] duration-200 ease-out motion-reduce:transition-none',
                   isCurrentPhase
-                    ? 'hover:bg-primary-50/40'
+                    ? 'hover:bg-primary-50/60 active:translate-y-[0.5px] active:duration-100'
                     : unlocked
-                    ? 'hover:bg-slate-50'
+                    ? 'hover:bg-slate-100 active:translate-y-[0.5px] active:duration-100'
                     : 'cursor-default',
                 )}
               >
-                {/* Phase colour dot */}
+                {/* Phase state indicator — brand state system (not a rainbow):
+                    completed = darker brand red, current = brand red, locked/
+                    upcoming = neutral gray. The "Completed" pill (below) carries
+                    the check. */}
                 <span
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5"
-                  style={{ backgroundColor: phase.color }}
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5 transition-colors"
+                  style={{
+                    backgroundColor:
+                      isCompletePhase ? '#9B1C20'        // primary-800 — completed
+                      : isCurrentPhase ? '#ED3237'        // primary-600 — current
+                      : '#CBD5E1',                        // slate-300 — locked / upcoming
+                  }}
                   aria-hidden="true"
                 />
 
@@ -216,7 +225,7 @@ export function CourseIndex({
                 role="region"
                 aria-labelledby={triggerId}
                 className={cn(
-                  'grid transition-[grid-template-rows] duration-200 ease-in-out',
+                  'grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none',
                   isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                 )}
               >
@@ -251,13 +260,15 @@ export function CourseIndex({
                               if (!isLocked || isAdmin) onModuleClick(mod.lessonIndex);
                             }}
                             disabled={isLocked && !isAdmin}
+                            title={isLocked && !isAdmin ? `Complete Module ${mod.lessonIndex} to unlock` : undefined}
                             className={cn(
-                              'w-full flex items-center gap-3 px-5 py-3 text-left min-h-[44px] transition-colors',
+                              'group w-full flex items-center gap-3 px-5 py-3 text-left min-h-[44px] transition-[background-color,transform,box-shadow] duration-200 ease-out motion-reduce:transition-none',
                               modIdx > 0 && 'border-t border-slate-50',
                               isLocked && !isAdmin
                                 ? 'opacity-50 cursor-not-allowed'
-                                : 'hover:bg-slate-50 cursor-pointer',
-                              isCurrent && 'bg-primary-50 hover:bg-primary-50/80',
+                                : 'hover:bg-primary-50/50 active:translate-y-[0.5px] active:duration-100 cursor-pointer',
+                              !isLocked && !isCurrent && 'hover:shadow-[inset_3px_0_0_0_rgba(237,50,55,0.5)]',
+                              isCurrent && 'bg-primary-50 hover:bg-primary-50/80 shadow-[inset_3px_0_0_0_#ED3237]',
                             )}
                           >
                             {/* State icon */}
@@ -267,7 +278,7 @@ export function CourseIndex({
                               ) : isLocked ? (
                                 <Lock className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
                               ) : isCurrent ? (
-                                <span className="w-2 h-2 rounded-full bg-primary-500 block" aria-hidden="true" />
+                                <span className="w-2 h-2 rounded-full bg-primary-600 block" aria-hidden="true" />
                               ) : (
                                 <span className="text-xs font-semibold text-slate-400 tabular-nums w-5 text-center">
                                   {globalNum}
@@ -302,8 +313,8 @@ export function CourseIndex({
                             {!isLocked && !isCompleted && (
                               <ArrowRight
                                 className={cn(
-                                  'w-3.5 h-3.5 flex-shrink-0',
-                                  isCurrent ? 'text-primary-300' : 'text-slate-200',
+                                  'w-3.5 h-3.5 flex-shrink-0 transition-[transform,color] duration-150 ease-out group-hover:translate-x-0.5 motion-reduce:transition-none',
+                                  isCurrent ? 'text-primary-300 group-hover:text-primary-500' : 'text-slate-200 group-hover:text-slate-400',
                                 )}
                                 aria-hidden="true"
                               />

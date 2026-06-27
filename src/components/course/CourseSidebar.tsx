@@ -131,16 +131,16 @@ function SidebarItem({
     <button
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className="group relative w-full flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-inset"
+      className={`group relative w-full flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2.5 text-left transition-[background-color,transform] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-inset motion-reduce:transition-none ${active ? '' : 'hover:translate-x-[3px] active:translate-x-[1px]'}`}
       style={{ background: active ? BG_ACTIVE : 'transparent' }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.035)'; }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
       onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
     >
       {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: ACCENT }} aria-hidden="true" />}
 
       {/* number / status badge */}
       <span
-        className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-bold"
+        className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-bold transition-transform duration-150 ease-out group-hover:scale-105 group-active:scale-95 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
         style={{
           background: active ? ACCENT : BG_BADGE,
           color: active ? '#fff' : status === 'done' ? TXT_DIM : TXT_MUTE,
