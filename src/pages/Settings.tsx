@@ -159,7 +159,7 @@ export default function Settings() {
           <button
             onClick={handleSave}
             disabled={mutation.isPending}
-            className="px-6 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
             {mutation.isPending ? 'Saving...' : 'Save Changes'}

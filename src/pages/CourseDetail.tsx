@@ -9,11 +9,23 @@ import {
   upsertLessonProgress,
   upsertEnrollment,
   insertActivity,
+  fetchTopicProgress,
+  upsertTopicProgress,
+  upsertTopicProgressMany,
 } from '../lib/api';
 import { slugify } from '../lib/slugify';
 import { pushLessonCompletion, markLessonCompleteInProgress } from '../lib/reportData';
-import { Play, CheckCircle2, Clock, Award } from 'lucide-react';
+import {
+  toTopicConfigs,
+  indexRowsByKey,
+  computeModuleCompletion,
+  computeResumeTopic,
+  type TopicProgressRow,
+} from '../lib/completion';
+import { Play, CheckCircle2, Clock, Award, PartyPopper } from 'lucide-react';
 import { LessonWorkspace } from '../components/LessonWorkspace';
+import { Module1Reader, deriveTopics, lessonObjective, stripModulePrefix, type NavPhase } from '../components/Module1Reader';
+import { ModuleCompleteModal } from '../components/ModuleCompleteModal';
 import { ConfettiEffect } from '../components/ConfettiEffect';
 import { CourseIndex, type IndexPhase, type IndexModule } from '../components/CourseIndex';
 import { Button } from '../components/ui/Button';
@@ -56,6 +68,17 @@ export default function CourseDetail({
   const [showCongrats, setShowCongrats] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [showHappyMsg, setShowHappyMsg] = useState(false);
+  // Per-module completion celebration (snapshot taken when a module is marked
+  // complete; the modal stays until the learner chooses Continue or Back).
+  const [completion, setCompletion] = useState<{
+    moduleName: string;
+    objective: string | null;
+    completedCount: number;
+    totalModules: number;
+    nextModuleNumber: number | null;
+    nextModuleName: string | null;
+    nextIndex: number;
+  } | null>(null);
 
   const { data: course, isLoading: courseLoading } = useQuery<Course>({
     queryKey: ['course', courseId],
@@ -72,12 +95,29 @@ export default function CourseDetail({
     queryFn: () => fetchLessonProgress(user!.id),
     enabled: !!user,
   });
+  // Granular topic-level progress (rolls up into lesson_progress above).
+  const { data: topicProgressData = [] } = useQuery<any[]>({
+    queryKey: ['topicProgress', user?.id, courseId],
+    queryFn: () => fetchTopicProgress(user!.id, courseId),
+    enabled: !!user && !!courseId,
+  });
 
   const loading = courseLoading || lessonsLoading || progressLoading;
   const completedLessons = useMemo(
     () => new Set<string>((progressData || []).map((p: any) => p.lesson_id)),
     [progressData],
   );
+
+  // Topic rows grouped by lesson — used for rollup, resume and analytics.
+  const topicRowsByLesson = useMemo(() => {
+    const m = new Map<string, TopicProgressRow[]>();
+    for (const r of topicProgressData || []) {
+      const arr = m.get(r.lesson_id) || [];
+      arr.push(r);
+      m.set(r.lesson_id, arr);
+    }
+    return m;
+  }, [topicProgressData]);
 
   // Derive current lesson index from the URL slug
   const currentLessonIndex = useMemo(() => {
@@ -100,12 +140,16 @@ export default function CourseDetail({
   };
   const goToOverview = () => navigate(`/course/${courseSlug}`);
 
-  // If lessonSlug doesn't match any lesson, fall back to overview
+  // Guard the reader: an invalid slug OR a locked lesson both fall back to the
+  // overview. This is what stops a learner bypassing progression by typing a URL
+  // (data integrity — unlocking is driven by persisted progress, not the UI).
   useEffect(() => {
-    if (lessonSlug && lessons.length > 0 && currentLessonIndex < 0) {
+    if (!lessonSlug || lessons.length === 0 || progressLoading) return;
+    const locked = currentLessonIndex > 0 && !completedLessons.has(lessons[currentLessonIndex - 1]?.id);
+    if (currentLessonIndex < 0 || (!isAdmin && locked)) {
       navigate(`/course/${courseSlug}`, { replace: true });
     }
-  }, [lessonSlug, lessons.length, currentLessonIndex, courseSlug, navigate]);
+  }, [lessonSlug, lessons, currentLessonIndex, completedLessons, isAdmin, progressLoading, courseSlug, navigate]);
 
   const progressPercent =
     lessons.length > 0 ? Math.round((completedLessons.size / lessons.length) * 100) : 0;
@@ -121,33 +165,137 @@ export default function CourseDetail({
   const isLastLesson = currentLessonIndex === lessons.length - 1;
   const isCourseDone = completedLessons.size === lessons.length && lessons.length > 0;
 
+  // ─── Topic-level progress: granular tracking + rollup ─────────────────────
+  // Optimistically patch the topic_progress cache so rollup/resume see writes
+  // immediately (before the refetch lands).
+  const patchTopicCache = (lessonId: string, topicKey: string, patch: Record<string, any>) => {
+    if (!user) return;
+    queryClient.setQueryData<any[]>(['topicProgress', user.id, courseId], (old = []) => {
+      const idx = old.findIndex((r) => r.lesson_id === lessonId && r.topic_key === topicKey);
+      if (idx >= 0) {
+        const copy = [...old];
+        copy[idx] = { ...copy[idx], ...patch };
+        return copy;
+      }
+      return [...old, {
+        user_id: user.id, course_id: courseId, lesson_id: lessonId, topic_key: topicKey, ...patch,
+      }];
+    });
+  };
+
+  // Write lesson_progress (the unlock authority) + enrollment. Returns whether
+  // this completion finished the whole course. Identical effect to the old
+  // module-completion path — existing consumers are untouched.
+  const persistLessonComplete = async (lesson: Lesson): Promise<boolean> => {
+    if (!user) return false;
+    if (completedLessons.has(lesson.id)) return false;
+    const now = new Date().toISOString();
+    await upsertLessonProgress({
+      user_id: user.id, lesson_id: lesson.id, completed: true, completed_at: now,
+    });
+    queryClient.setQueryData<any[]>(['progress', user.id], (old = []) =>
+      old.some((p) => p.lesson_id === lesson.id)
+        ? old
+        : [...old, { lesson_id: lesson.id, completed: true }]);
+    queryClient.invalidateQueries({ queryKey: ['progress', user.id] });
+    pushLessonCompletion(user.id, lesson.id, courseId, lesson.duration || null);
+    markLessonCompleteInProgress(user.id, courseId, lesson.id);
+
+    const newCount = completedLessons.size + 1;
+    const pct = Math.round((newCount / lessons.length) * 100);
+    const status = pct === 100 ? 'completed' : 'in_progress';
+    await upsertEnrollment({
+      user_id: user.id, course_id: courseId, progress_percent: pct, status,
+      completed_at: status === 'completed' ? now : null,
+    });
+    queryClient.invalidateQueries({ queryKey: ['enrollments', user.id] });
+    return newCount === lessons.length;
+  };
+
+  // If every required topic of a lesson is complete, roll up to lesson_progress
+  // (this is what unlocks the next module — driven by topic completion).
+  const maybeRollupLesson = async (lesson: Lesson) => {
+    if (!user || completedLessons.has(lesson.id)) return;
+    const all = (queryClient.getQueryData<any[]>(['topicProgress', user.id, courseId]) || [])
+      .filter((r) => r.lesson_id === lesson.id);
+    const configs = toTopicConfigs(deriveTopics(lesson.video_url));
+    if (computeModuleCompletion(configs, indexRowsByKey(all)).isComplete) {
+      await persistLessonComplete(lesson);
+    }
+  };
+
+  // Reader callback: a topic came into view → record visit (never downgrades a
+  // completed topic; bumps visited_at for resume + analytics).
+  const handleTopicView = (topicKey: string) => {
+    if (!user || !currentLesson) return;
+    const now = new Date().toISOString();
+    // A view records the visit ONLY — it never sends `status`, so on first visit
+    // the DB defaults it to 'in_progress' and on any later visit the existing
+    // status is left intact (a completed topic can never be downgraded by a
+    // stray re-view, even if a refetch races the optimistic cache).
+    const existing = (queryClient.getQueryData<any[]>(['topicProgress', user.id, courseId]) || [])
+      .find((r) => r.lesson_id === currentLesson.id && r.topic_key === topicKey);
+    patchTopicCache(currentLesson.id, topicKey, {
+      status: existing?.status ?? 'in_progress', topic_type: 'reading', visited_at: now,
+    });
+    void upsertTopicProgress({
+      user_id: user.id, course_id: courseId, lesson_id: currentLesson.id,
+      topic_key: topicKey, topic_type: 'reading', visited_at: now,
+    });
+  };
+
+  // Reader callback: a topic was completed (e.g. scrolled past) → mark complete
+  // then attempt the module rollup.
+  const handleTopicComplete = async (topicKey: string) => {
+    if (!user || !currentLesson) return;
+    const now = new Date().toISOString();
+    patchTopicCache(currentLesson.id, topicKey, {
+      status: 'completed', topic_type: 'reading', progress_ratio: 1, visited_at: now, completed_at: now,
+    });
+    await upsertTopicProgress({
+      user_id: user.id, course_id: courseId, lesson_id: currentLesson.id,
+      topic_key: topicKey, topic_type: 'reading', status: 'completed',
+      progress_ratio: 1, visited_at: now, completed_at: now,
+    });
+    await maybeRollupLesson(currentLesson);
+  };
+
+  // Finishing a lesson marks ALL its canonical topics complete (covers the
+  // paginated reader + acts as the safety net), then rolls up. Returns course-done.
+  const handleLessonFinish = async (lesson: Lesson): Promise<boolean> => {
+    if (!user) return false;
+    const now = new Date().toISOString();
+    const configs = toTopicConfigs(deriveTopics(lesson.video_url));
+    configs.forEach((c) =>
+      patchTopicCache(lesson.id, c.key, {
+        status: 'completed', topic_type: c.type, progress_ratio: 1, visited_at: now, completed_at: now,
+      }));
+    await upsertTopicProgressMany(configs.map((c) => ({
+      user_id: user.id, course_id: courseId, lesson_id: lesson.id,
+      topic_key: c.key, topic_type: c.type, status: 'completed',
+      progress_ratio: 1, visited_at: now, completed_at: now,
+    })));
+    return persistLessonComplete(lesson);
+  };
+
+  // Exact resume target within the current lesson (first-incomplete-required →
+  // last-visited → first-topic).
+  const resumeTopicKey = useMemo(() => {
+    if (!currentLesson) return null;
+    const rowsArr = (topicRowsByLesson.get(currentLesson.id) || []) as TopicProgressRow[];
+    if (rowsArr.length === 0) return null; // fresh lesson → reader uses its default landing
+    const configs = toTopicConfigs(deriveTopics(currentLesson.video_url));
+    return computeResumeTopic(configs, indexRowsByKey(rowsArr));
+  }, [currentLesson, topicRowsByLesson]);
+
   const markCompleteAndContinue = async () => {
     if (!user || !currentLesson) return;
     try {
-      if (!completedLessons.has(currentLesson.id)) {
-        await upsertLessonProgress({
-          user_id: user.id,
-          lesson_id: currentLesson.id,
-          completed: true,
-          completed_at: new Date().toISOString(),
-        });
-        queryClient.invalidateQueries({ queryKey: ['progress', user.id] });
-        pushLessonCompletion(user.id, currentLesson.id, courseId, currentLesson.duration || null);
-        markLessonCompleteInProgress(user.id, courseId, currentLesson.id);
-      }
-
-      const newCompletedCount =
-        completedLessons.size + (completedLessons.has(currentLesson.id) ? 0 : 1);
-      const newProgress = Math.round((newCompletedCount / lessons.length) * 100);
-
-      if (newCompletedCount === lessons.length) {
-        await upsertEnrollment({
-          user_id: user.id,
-          course_id: courseId,
-          progress_percent: 100,
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-        });
+      const wasCompleted = isCurrentCompleted;
+      // Marks the module complete in the DB, persists progress and rolls up so
+      // the next module is unlocked. Returns whether this finished the course.
+      const courseDone = await handleLessonFinish(currentLesson);
+      if (courseDone) {
         await insertActivity({
           user_id: user.id,
           type: 'course_completed',
@@ -158,17 +306,20 @@ export default function CourseDetail({
         setShowCelebration(true);
         setShowCongrats(true);
       } else {
-        const status = newProgress === 100 ? 'completed' : 'in_progress';
-        await upsertEnrollment({
-          user_id: user.id,
-          course_id: courseId,
-          progress_percent: newProgress,
-          status,
-          completed_at: status === 'completed' ? new Date().toISOString() : null,
+        // Celebrate the module in a modal — the next module is now unlocked, but
+        // we do NOT navigate; the learner advances deliberately. Counts are
+        // snapshotted here (the just-completed module included).
+        const nextIndex = currentLessonIndex + 1;
+        const nextLesson = lessons[nextIndex] ?? null;
+        setCompletion({
+          moduleName: stripModulePrefix(currentLesson.title),
+          objective: lessonObjective(currentLesson.video_url),
+          completedCount: completedLessons.size + (wasCompleted ? 0 : 1),
+          totalModules: lessons.length,
+          nextModuleNumber: nextLesson ? nextIndex + 1 : null,
+          nextModuleName: nextLesson ? stripModulePrefix(nextLesson.title) : null,
+          nextIndex,
         });
-        queryClient.invalidateQueries({ queryKey: ['enrollments', user.id] });
-        setShowCelebration(true);
-        goToLesson(currentLessonIndex + 1);
       }
     } catch (err) {
       console.error('Error marking lesson complete', err);
@@ -206,6 +357,21 @@ export default function CourseDetail({
       } as IndexModule)),
     })),
   [sectionOrder, sectionMap, lessons]);
+
+  // Full Phase → Module → Topic tree for the Module 1 (Kinetic) reader's rail.
+  const courseTree: NavPhase[] = useMemo(() =>
+    sectionOrder.map((secName) => ({
+      name: secName,
+      modules: (sectionMap[secName] || []).map((lIdx) => ({
+        lessonIndex: lIdx,
+        id: lessons[lIdx].id,
+        title: lessons[lIdx].title,
+        completed: completedLessons.has(lessons[lIdx].id),
+        accessible: isAdmin || lIdx === 0 || completedLessons.has(lessons[lIdx - 1]?.id),
+        topics: deriveTopics(lessons[lIdx].video_url),
+      })),
+    })),
+  [sectionOrder, sectionMap, lessons, completedLessons, isAdmin]);
 
   const getPhaseStatus = (phaseNum: number): 'completed' | 'in_progress' | 'locked' | 'not_started' => {
     const phase = indexPhases.find(p => p.number === phaseNum);
@@ -371,7 +537,32 @@ export default function CourseDetail({
       )}
 
       {/* ── Lesson workspace ─────────────────────────────────────────────────── */}
-      {isReaderView && currentLesson && (
+      {/* All Phase-1 modules (the first section) use the unified premium reader
+          (single-scroll, scroll-spy, Kinetic theme); later phases keep the
+          standard LessonWorkspace until they are migrated. */}
+      {isReaderView && currentLesson && sectionOrder.length > 0 && (currentLesson.section || 'General') === sectionOrder[0] ? (
+        <Module1Reader
+          lesson={currentLesson}
+          course={course}
+          courseProgressPercent={progressPercent}
+          isCurrentCompleted={isCurrentCompleted}
+          isCourseDone={isCourseDone}
+          courseTree={courseTree}
+          currentLessonIndex={currentLessonIndex}
+          onSelectModule={goToLesson}
+          resumeTopicKey={resumeTopicKey}
+          onTopicView={handleTopicView}
+          onTopicComplete={handleTopicComplete}
+          onBack={goToOverview}
+          onMarkComplete={markCompleteAndContinue}
+          onNextLesson={() => {
+            setShowCelebration(true);
+            setShowHappyMsg(true);
+            goToLesson(currentLessonIndex + 1);
+          }}
+          onAssessment={() => onNavigate('assessments')}
+        />
+      ) : isReaderView && currentLesson && (
         <LessonWorkspace
           lesson={currentLesson}
           course={course}
@@ -380,6 +571,9 @@ export default function CourseDetail({
           isCurrentCompleted={isCurrentCompleted}
           isLastLesson={isLastLesson}
           isCourseDone={isCourseDone}
+          resumeTopicKey={resumeTopicKey}
+          onTopicView={handleTopicView}
+          onTopicComplete={handleTopicComplete}
           onBack={goToOverview}
           onMarkComplete={markCompleteAndContinue}
           onPrevLesson={() => { if (currentLessonIndex > 0) goToLesson(currentLessonIndex - 1); }}
@@ -419,6 +613,26 @@ export default function CourseDetail({
           </div>
         </div>
       )}
+
+      {/* ── Module-complete celebration (per module, not course end) ─────────── */}
+      <ModuleCompleteModal
+        open={!!completion}
+        moduleName={completion?.moduleName ?? ''}
+        objective={completion?.objective ?? null}
+        completedCount={completion?.completedCount ?? 0}
+        totalModules={completion?.totalModules ?? 0}
+        nextModuleNumber={completion?.nextModuleNumber ?? null}
+        nextModuleName={completion?.nextModuleName ?? null}
+        onContinue={() => {
+          const idx = completion?.nextIndex;
+          setCompletion(null);
+          if (idx != null) goToLesson(idx);
+        }}
+        onDismiss={() => {
+          setCompletion(null);
+          goToOverview();
+        }}
+      />
     </>
   );
 }
@@ -436,7 +650,9 @@ function HappyLearningToast({ onDone }: { onDone: () => void }) {
       style={{ animation: 'happyIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both, happyOut 0.4s ease-in 2.3s both' }}
     >
       <div className="flex items-center gap-3 bg-white border border-slate-100 shadow-2xl rounded-2xl px-6 py-4">
-        <span className="text-3xl select-none" aria-hidden="true">🎉</span>
+        <span className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-50 text-primary-600" aria-hidden="true">
+          <PartyPopper className="w-5 h-5" />
+        </span>
         <div>
           <p className="text-base font-bold text-slate-800 leading-tight">Happy Learning!</p>
           <p className="text-xs text-slate-500 mt-0.5">Keep up the great work</p>

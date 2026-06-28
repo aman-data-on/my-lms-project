@@ -4,7 +4,7 @@ Durable project memory — decisions, conventions, and gotchas that aren't
 obvious from the code. Update this on every significant change (see the rule in
 [../CLAUDE.md](../CLAUDE.md)).
 
-> Last updated: 2026-06-26
+> Last updated: 2026-06-28
 
 ---
 
@@ -61,9 +61,38 @@ obvious from the code. Update this on every significant change (see the rule in
 - Editing an already-applied migration needs `supabase migration repair`; prefer
   adding a NEW migration. Targeted tweaks use SQL `replace(video_url, ...)` to
   avoid rewriting the whole block array.
-- Only **Module 1** uses the new reader. **Modules 2–6** still render legacy
-  hardcoded slides in `SalesOnboardingCourse.tsx` (`MODULE_SLIDES`) and are the
-  next migration target.
+- **All six Phase-1 modules** now render through the generalized `Module1Reader`
+  (`CourseDetail` routes to it when the lesson's section is the first/Phase-1
+  section; Phase 2+ uses `LessonWorkspace`). The legacy `SalesOnboardingCourse.tsx`
+  (`MODULE_SLIDES`, course id `cdbf91e9…`) is superseded by the canonical
+  `CourseDetail` path (live course `6c3c352c…`).
+
+## Progression & completion (phase1-lms-redesign)
+
+- **Topic-level progression** layers on top of `lesson_progress` (still the unlock
+  authority). `topic_progress` (own-row RLS) tracks per-topic state;
+  `src/lib/completion.ts` holds the completion model (per-topic-type rules,
+  weighting) and rolls up to `lesson_progress` when every required topic is done.
+  Resume order: first-incomplete-required → last-visited → first-topic. No SQL
+  backfill; backward-compatible.
+- **A module's "learning objective" = the authored "Goal:" line** in its first
+  text block — there is NO `learning_objective` column; lesson content blocks live
+  as JSON in `lessons.video_url`. `lessonObjective(video_url)` (Module1Reader)
+  parses it for the completion modal. Never invent objective copy.
+- **Module-completion modal** (`ModuleCompleteModal`) replaces auto-advance: mark
+  complete → unlock next → show the modal (no navigation until the user chooses).
+  Progress shown is **course-wide (X / total lessons)**, not per-phase (user
+  decision). "Back to Dashboard" + ESC + backdrop → the global dashboard
+  (`onNavigate('dashboard')`). No confetti (course *completion* keeps its own
+  confetti overlay).
+
+## Feedback & reliability
+
+- **Toasts are the canonical success/error channel.** `useToast()` →
+  `toast(msg, variant)` (`src/contexts/ToastContext.tsx`, mounted at root). Wire
+  every mutation to it; never `console.log`-and-swallow. Standard for any action:
+  loading → disabled + spinner; error → toast; validation → message; success only
+  on confirmed success; never a clickable button that goes nowhere.
 
 ## Repo / git
 
@@ -78,3 +107,10 @@ obvious from the code. Update this on every significant change (see the rule in
   content due to Vite caching — trust the DB/migration, not the harness string.
 - `Date.now()`/`Math.random()` etc. are fine in app code but unavailable in
   Workflow scripts.
+- **Supabase to-one embeds are OBJECTS at runtime**, not arrays — read
+  `row.courses.id`, not `row.courses[0].id` (the latter silently yields
+  `undefined`; this broke the dashboard "Continue Learning" button).
+- **`.upsert()` must pass `onConflict`** on the natural key when the unique
+  constraint isn't the PK: `lesson_progress` → `user_id,lesson_id`; `enrollments`
+  → `user_id,course_id`; `topic_progress` → `user_id,lesson_id,topic_key`.
+  Otherwise a pre-existing row 409s (was masked by immediate navigation).

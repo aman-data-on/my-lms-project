@@ -34,7 +34,7 @@ export default function MyCourses({ onNavigate }: { onNavigate: (page: string, d
           <p className="text-sm text-slate-500 mb-4">Browse the course library to start learning</p>
           <button
             onClick={() => onNavigate('course-library')}
-            className="px-5 py-2.5 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 transition-colors"
+            className="px-5 py-2.5 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 transition-colors"
           >
             Browse Courses
           </button>
@@ -68,7 +68,7 @@ export default function MyCourses({ onNavigate }: { onNavigate: (page: string, d
                       <span className="font-medium text-primary-700">{course.progress_percent}%</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2">
-                      <div className="bg-primary-500 rounded-full h-2 transition-all" style={{ width: `${course.progress_percent}%` }} />
+                      <div className="bg-primary-600 rounded-full h-2 transition-all" style={{ width: `${course.progress_percent}%` }} />
                     </div>
                   </div>
                   <button
@@ -76,7 +76,7 @@ export default function MyCourses({ onNavigate }: { onNavigate: (page: string, d
                     className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                       course.status === 'completed'
                         ? 'bg-green-50 text-green-700 hover:bg-green-100'
-                        : 'bg-primary-800 text-white hover:bg-primary-900'
+                        : 'bg-primary-700 text-white hover:bg-primary-800'
                     }`}
                   >
                     {course.status === 'completed' ? (

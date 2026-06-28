@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { slugify } from './slugify';
 
 interface UpcomingItem {
   id: string;
@@ -36,13 +37,49 @@ export async function fetchLessonProgress(userId: string) {
 }
 
 export async function upsertLessonProgress(payload: any) {
-  const { data, error } = await supabase.from('lesson_progress').upsert(payload);
+  // Keyed by the natural unique constraint so re-completing a lesson UPDATES the
+  // existing row instead of 409-ing on a duplicate (user_id, lesson_id).
+  const { data, error } = await supabase
+    .from('lesson_progress')
+    .upsert(payload, { onConflict: 'user_id,lesson_id' });
+  if (error) throw error;
+  return data;
+}
+
+// ─── Topic-level progress (granular layer; rolls up into lesson_progress) ──────
+export async function fetchTopicProgress(userId: string, courseId?: string) {
+  let q = supabase.from('topic_progress').select('*').eq('user_id', userId);
+  if (courseId) q = q.eq('course_id', courseId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+/** Idempotent upsert keyed by (user_id, lesson_id, topic_key). */
+export async function upsertTopicProgress(payload: any) {
+  const { data, error } = await supabase
+    .from('topic_progress')
+    .upsert(payload, { onConflict: 'user_id,lesson_id,topic_key' });
+  if (error) throw error;
+  return data;
+}
+
+/** Bulk upsert (used when finishing a lesson marks all its topics complete). */
+export async function upsertTopicProgressMany(rows: any[]) {
+  if (!rows.length) return null;
+  const { data, error } = await supabase
+    .from('topic_progress')
+    .upsert(rows, { onConflict: 'user_id,lesson_id,topic_key' });
   if (error) throw error;
   return data;
 }
 
 export async function upsertEnrollment(payload: any) {
-  const { data, error } = await supabase.from('enrollments').upsert(payload);
+  // Keyed by the natural unique constraint so updating an existing enrollment
+  // UPDATES it instead of 409-ing on a duplicate (user_id, course_id).
+  const { data, error } = await supabase
+    .from('enrollments')
+    .upsert(payload, { onConflict: 'user_id,course_id' });
   if (error) throw error;
   return data;
 }
@@ -273,23 +310,38 @@ export async function fetchDashboardData(userId: string) {
   };
 
   const continueCourseRecord = (enrollments || []).find((e: any) => e.status === 'in_progress');
-  const continueCourse = continueCourseRecord?.courses ? {
-    id: continueCourseRecord.courses[0]?.id,
-    title: continueCourseRecord.courses[0]?.title,
-    description: continueCourseRecord.courses[0]?.description,
-    department: continueCourseRecord.courses[0]?.department,
-    thumbnail_url: continueCourseRecord.courses[0]?.thumbnail_url,
-    duration: continueCourseRecord.courses[0]?.duration,
-    progress_percent: continueCourseRecord.progress_percent ?? 0,
-    status: continueCourseRecord.status,
+  // Supabase returns a to-one embed (`courses(...)`) as an OBJECT. Normalize
+  // defensively so an array shape (future relationship change) also works —
+  // reading `courses[0]` against an object was leaving every field undefined,
+  // which silently broke the dashboard's Continue button (empty slug → no nav).
+  const cc = continueCourseRecord
+    ? (Array.isArray(continueCourseRecord.courses) ? continueCourseRecord.courses[0] : continueCourseRecord.courses)
+    : null;
+  const continueCourse = cc ? {
+    id: cc.id,
+    title: cc.title,
+    description: cc.description,
+    department: cc.department,
+    thumbnail_url: cc.thumbnail_url,
+    duration: cc.duration,
+    progress_percent: continueCourseRecord?.progress_percent ?? 0,
+    status: continueCourseRecord?.status,
+    resumeLessonSlug: null as string | null,
   } : null;
 
   // Compute the continue-course progress from ACTUAL lesson completion so the
   // dashboard matches the course page (the stored enrollments.progress_percent
-  // can be stale / 0). Single source of truth = completed lessons / total.
+  // can be stale / 0), and resolve the resume target = the first incomplete
+  // lesson (a new user with no completions resolves to the first lesson /
+  // Module 1). The reader then resumes the last incomplete topic within it.
   if (continueCourse?.id) {
-    const { data: courseLessons } = await supabase.from('lessons').select('id').eq('course_id', continueCourse.id);
-    const lessonIds = (courseLessons || []).map((l: any) => l.id);
+    const { data: courseLessons } = await supabase
+      .from('lessons')
+      .select('id, title, order_index')
+      .eq('course_id', continueCourse.id)
+      .order('order_index');
+    const courseLessonsArr = (courseLessons || []) as { id: string; title: string }[];
+    const lessonIds = courseLessonsArr.map((l) => l.id);
     if (lessonIds.length > 0) {
       const { data: doneRows } = await supabase
         .from('lesson_progress')
@@ -297,7 +349,10 @@ export async function fetchDashboardData(userId: string) {
         .eq('user_id', userId)
         .eq('completed', true)
         .in('lesson_id', lessonIds);
-      continueCourse.progress_percent = Math.round(((doneRows?.length || 0) / lessonIds.length) * 100);
+      const doneSet = new Set((doneRows || []).map((r: any) => r.lesson_id));
+      continueCourse.progress_percent = Math.round((doneSet.size / lessonIds.length) * 100);
+      const resume = courseLessonsArr.find((l) => !doneSet.has(l.id)) || courseLessonsArr[0];
+      continueCourse.resumeLessonSlug = resume ? slugify(resume.title) : null;
     }
   }
 

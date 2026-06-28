@@ -11,6 +11,9 @@ import { useState, type ReactNode } from 'react';
 // title + lead text, so lessons that would otherwise leave the intro's right
 // column empty get a relevant, on-brand visual automatically.
 
+/** Frame palette: 'rose' = original brand look; 'cool' = flat, Kinetic-reader tones. */
+export type IllustrationTone = 'rose' | 'cool';
+
 export type IllustrationKind =
   | 'infra'
   | 'ecosystem'
@@ -60,25 +63,160 @@ const LABELS: Record<IllustrationKind, string> = {
 
 // Shared frame: rose gradient panel, border, decorative dots, brand gradients.
 // Every motif is drawn inside this so the whole set reads as one language.
-function Frame({ uid, label, className, children }: { uid: string; label: string; className?: string; children: ReactNode }) {
+function Frame({ uid, label, className, tone = 'rose', plain = false, children }: { uid: string; label: string; className?: string; tone?: IllustrationTone; plain?: boolean; children: ReactNode }) {
+  // `cool` flattens the two gradients to solids and retints the panel/border/dots
+  // to the Kinetic reader's cool palette; `rose` keeps the original look.
+  // `plain` drops the decorative corner dots (used by labeled diagrams).
+  const cool = tone === 'cool';
   return (
     <svg viewBox="0 0 440 320" role="img" aria-label={label} className={className} style={{ width: '100%', height: 'auto', display: 'block' }}>
       <defs>
         <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#FFF6F5" />
-          <stop offset="1" stopColor="#FFFDFC" />
+          <stop offset="0" stopColor={cool ? '#EEF4FB' : '#FFF6F5'} />
+          <stop offset="1" stopColor={cool ? '#EEF4FB' : '#FFFDFC'} />
         </linearGradient>
         <linearGradient id={`${uid}-red`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FF5A5F" />
-          <stop offset="1" stopColor="#ED3237" />
+          <stop offset="0" stopColor={cool ? '#B7102A' : '#FF5A5F'} />
+          <stop offset="1" stopColor={cool ? '#B7102A' : '#ED3237'} />
         </linearGradient>
       </defs>
-      <rect x="0" y="0" width="440" height="320" rx="20" fill={`url(#${uid}-bg)`} stroke="#F3DAD8" />
-      <circle cx="60" cy="52" r="4" fill="#FBCFD1" />
-      <circle cx="392" cy="80" r="5" fill="#FBCFD1" />
-      <circle cx="384" cy="262" r="4" fill="#F3DAD8" />
+      <rect x="0" y="0" width="440" height="320" rx="20" fill={`url(#${uid}-bg)`} stroke={cool ? '#D4DFEB' : '#F3DAD8'} />
+      {!plain && <>
+        <circle cx="60" cy="52" r="4" fill={cool ? '#C7D6E6' : '#FBCFD1'} />
+        <circle cx="392" cy="80" r="5" fill={cool ? '#C7D6E6' : '#FBCFD1'} />
+        <circle cx="384" cy="262" r="4" fill={cool ? '#D4DFEB' : '#F3DAD8'} />
+      </>}
       {children}
     </svg>
+  );
+}
+
+// ── Labeled diagrams (real text, self-explanatory) ─────────────────────────────
+// Unlike the generic motifs above, these render the actual concept text supplied
+// by the caller, so a learner can understand the diagram on its own.
+export interface DiagramContent {
+  shape: 'flow' | 'stack' | 'hub' | 'pillars';
+  /** flow: ordered steps. */ steps?: { label: string; sub?: string }[];
+  /** stack: layers top→bottom, each with item labels. */ layers?: { name: string; items: string[] }[];
+  /** hub: centre + satellites. */ center?: string; nodes?: { label: string; sub?: string }[];
+  /** pillars: columns with bullet items. */ columns?: { label: string; items: string[] }[];
+}
+
+function palette(tone: IllustrationTone) {
+  return tone === 'cool'
+    ? { node: '#FFFFFF', stroke: '#CFDDEA', soft: '#E3ECF6', text: '#16212B', sub: '#5A6B7A', accent: '#B7102A', line: '#BBD0E2', a: ['#6366F1', '#10B981', '#F59E0B', '#A855F7'] }
+    : { node: '#FFFFFF', stroke: '#E6E5E0', soft: '#F4EDEB', text: '#221B1D', sub: '#6B6E76', accent: '#ED3237', line: '#E2DAD6', a: ['#6366F1', '#10B981', '#F59E0B', '#A855F7'] };
+}
+
+// Truncate to keep a single line inside its box (no SVG auto-wrap).
+const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+
+function LabeledDiagram({ content, tone }: { content: DiagramContent; tone: IllustrationTone }) {
+  const p = palette(tone);
+  const FONT = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+
+  if (content.shape === 'flow') {
+    const steps = (content.steps || []).slice(0, 4);
+    const n = steps.length || 1;
+    const top = 30, bottom = 292, gap = 18;
+    const h = Math.min(60, (bottom - top - (n - 1) * gap) / n);
+    return (
+      <g fontFamily={FONT}>
+        {steps.map((s, i) => {
+          const y = top + i * (h + gap);
+          const accent = p.a[i % p.a.length];
+          return (
+            <g key={i}>
+              {i > 0 && <path d={`M220 ${y - gap + 1} l-5 -8 h10 z`} fill={p.accent} opacity="0.8" />}
+              <rect x="58" y={y} width="324" height={h} rx="11" fill={p.node} stroke={p.stroke} />
+              <rect x="58" y={y} width="5" height={h} rx="2.5" fill={accent} />
+              <circle cx="88" cy={y + h / 2} r="12" fill={`${accent}1A`} stroke={accent} />
+              <text x="88" y={y + h / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent}>{i + 1}</text>
+              <text x="112" y={y + (s.sub ? h / 2 - 4 : h / 2 + 5)} fontSize="15" fontWeight="700" fill={p.text}>{clip(s.label, 26)}</text>
+              {s.sub && <text x="112" y={y + h / 2 + 14} fontSize="12" fill={p.sub}>{clip(s.sub, 34)}</text>}
+            </g>
+          );
+        })}
+      </g>
+    );
+  }
+
+  if (content.shape === 'stack') {
+    const layers = (content.layers || []).slice(0, 4);
+    const n = layers.length || 1;
+    const top = 30, bottom = 292, gap = 12;
+    const h = Math.min(72, (bottom - top - (n - 1) * gap) / n);
+    return (
+      <g fontFamily={FONT}>
+        {layers.map((l, i) => {
+          const y = top + i * (h + gap);
+          const accent = p.a[i % p.a.length];
+          return (
+            <g key={i}>
+              <rect x="40" y={y} width="360" height={h} rx="11" fill={`${accent}12`} stroke={`${accent}3A`} />
+              <rect x="40" y={y} width="5" height={h} rx="2.5" fill={accent} />
+              <text x="58" y={y + 22} fontSize="13.5" fontWeight="700" fill={p.text}>{clip(l.name, 40)}</text>
+              <text x="58" y={y + 42} fontSize="12.5" fill={p.sub}>{clip(l.items.join('  ·  '), 48)}</text>
+            </g>
+          );
+        })}
+      </g>
+    );
+  }
+
+  if (content.shape === 'hub') {
+    const nodes = (content.nodes || []).slice(0, 4);
+    const pos = [{ x: 40, y: 38 }, { x: 232, y: 38 }, { x: 40, y: 226 }, { x: 232, y: 226 }];
+    return (
+      <g fontFamily={FONT}>
+        {nodes.map((_, i) => (
+          <line key={`l${i}`} x1="220" y1="160" x2={pos[i].x + 84} y2={pos[i].y + 28} stroke={p.line} strokeWidth="2" strokeDasharray="2 6" strokeLinecap="round" />
+        ))}
+        {nodes.map((nd, i) => {
+          const accent = p.a[i % p.a.length];
+          return (
+            <g key={i}>
+              <rect x={pos[i].x} y={pos[i].y} width="168" height="56" rx="11" fill={p.node} stroke={p.stroke} />
+              <rect x={pos[i].x} y={pos[i].y} width="5" height="56" rx="2.5" fill={accent} />
+              <text x={pos[i].x + 16} y={pos[i].y + (nd.sub ? 24 : 32)} fontSize="14" fontWeight="700" fill={p.text}>{clip(nd.label, 20)}</text>
+              {nd.sub && <text x={pos[i].x + 16} y={pos[i].y + 40} fontSize="11.5" fill={p.sub}>{clip(nd.sub, 24)}</text>}
+            </g>
+          );
+        })}
+        <circle cx="220" cy="160" r="40" fill={p.accent} />
+        {(content.center || '').split(' ').slice(0, 2).map((w, i, arr) => (
+          <text key={i} x="220" y={160 + (arr.length > 1 ? i * 13 - 4 : 4)} textAnchor="middle" fontSize="12.5" fontWeight="700" fill="#fff">{clip(w, 12)}</text>
+        ))}
+      </g>
+    );
+  }
+
+  // pillars
+  const cols = (content.columns || []).slice(0, 3);
+  const n = cols.length || 1;
+  const gap = 14, x0 = 40, total = 360;
+  const cw = (total - (n - 1) * gap) / n;
+  return (
+    <g fontFamily={FONT}>
+      {cols.map((c, i) => {
+        const x = x0 + i * (cw + gap);
+        const accent = p.a[i % p.a.length];
+        return (
+          <g key={i}>
+            <rect x={x} y="34" width={cw} height="252" rx="11" fill={p.node} stroke={p.stroke} />
+            <rect x={x} y="34" width={cw} height="38" rx="11" fill={accent} />
+            <rect x={x} y="58" width={cw} height="14" fill={accent} />
+            <text x={x + cw / 2} y="58" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">{clip(c.label, Math.floor(cw / 8))}</text>
+            {c.items.slice(0, 5).map((it, j) => (
+              <g key={j}>
+                <circle cx={x + 16} cy={92 + j * 30} r="3" fill={accent} />
+                <text x={x + 26} y={96 + j * 30} fontSize="11.5" fill={p.text}>{clip(it, Math.floor(cw / 7))}</text>
+              </g>
+            ))}
+          </g>
+        );
+      })}
+    </g>
   );
 }
 
@@ -294,11 +432,11 @@ const MOTIFS: Record<IllustrationKind, (p: { uid: string }) => ReactNode> = {
 
 // A real image (e.g. a bespoke topic illustration) framed in the same rose
 // panel as the vector motifs, so it sits in one consistent visual language.
-function ImageFrame({ src, alt, className, onError }: { src: string; alt: string; className?: string; onError: () => void }) {
+function ImageFrame({ src, alt, className, tone = 'rose', onError }: { src: string; alt: string; className?: string; tone?: IllustrationTone; onError: () => void }) {
   return (
     <div
       className={`rounded-[20px] border p-3 sm:p-5 flex items-center justify-center ${className ?? ''}`}
-      style={{ background: 'linear-gradient(135deg,#FFF6F5,#FFFDFC)', borderColor: '#F3DAD8' }}
+      style={tone === 'cool' ? { background: '#EEF4FB', borderColor: '#D4DFEB' } : { background: 'linear-gradient(135deg,#FFF6F5,#FFFDFC)', borderColor: '#F3DAD8' }}
     >
       <img src={src} alt={alt} onError={onError} loading="lazy" className="w-full h-auto block rounded-lg" />
     </div>
@@ -314,22 +452,35 @@ export function TopicIllustration({
   title = '',
   text = '',
   className,
+  tone = 'rose',
+  content,
 }: {
   src?: string;
   kind?: IllustrationKind;
   title?: string;
   text?: string;
   className?: string;
+  tone?: IllustrationTone;
+  /** Real labeled diagram content — renders actual text instead of a generic motif. */
+  content?: DiagramContent;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   if (src && !imgFailed) {
-    return <ImageFrame src={src} alt={title || 'Topic illustration'} className={className} onError={() => setImgFailed(true)} />;
+    return <ImageFrame src={src} alt={title || 'Topic illustration'} className={className} tone={tone} onError={() => setImgFailed(true)} />;
+  }
+  // Preferred path: a self-explanatory labeled diagram with the topic's real text.
+  if (content) {
+    return (
+      <Frame uid={`ti-lbl-${content.shape}-${tone}`} label={title || 'Topic diagram'} tone={tone} plain className={className}>
+        <LabeledDiagram content={content} tone={tone} />
+      </Frame>
+    );
   }
   const resolved = kind ?? inferIllustrationKind(`${title} ${text}`);
-  const uid = `ti-${resolved}`;
+  const uid = `ti-${resolved}-${tone}`;
   const Motif = MOTIFS[resolved];
   return (
-    <Frame uid={uid} label={LABELS[resolved]} className={className}>
+    <Frame uid={uid} label={LABELS[resolved]} tone={tone} className={className}>
       <Motif uid={uid} />
     </Frame>
   );

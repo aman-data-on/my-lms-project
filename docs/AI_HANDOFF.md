@@ -2,7 +2,7 @@
 
 > Context document for AI-assisted development continuity.
 > Maintained by: Claude Code (Anthropic) on behalf of the development team.
-> Last updated: 2026-06-26
+> Last updated: 2026-06-28
 > See also: [../CLAUDE.md](../CLAUDE.md) (start here + docs index) and
 > [MEMORY.md](MEMORY.md) (durable decisions). Update all three on each change.
 
@@ -10,10 +10,13 @@
 
 ## Project State Summary
 
-Phases 1–2 (routing, react-query data layer) are complete. Phase 3 (UX/responsive
-redesign) is underway, and the **Module 1 premium lesson reader** is built and
-shipped. Codebase is stable: 0 TypeScript errors, passing production build.
-First push to `origin/main` landed as commit `967586c`.
+Phases 1–2 (routing, react-query) are complete. The **Phase-1 premium reader**
+now powers **all six Phase-1 modules** via the generalized `Module1Reader`, and
+this arc added **topic-level progression**, a **module-completion modal**, a
+**dashboard resume** fix, and **app-wide toast feedback** (the formerly-unused
+toast system is now wired everywhere). Codebase is stable: 0 TypeScript errors,
+passing production build. This arc lives on branch `phase1-lms-redesign` (PR into
+`main`); earlier work landed on `main` through `967586c`.
 
 ### Completed Phases
 
@@ -23,14 +26,17 @@ First push to `origin/main` landed as commit `967586c`.
 | P2 | react-query data layer (Dashboard, MyCourses, CourseDetail, Assessments) | ✅ Complete |
 | P2-Docs | Documentation catch-up | ✅ Complete |
 | P3 | Responsive app shell, mobile sidebar a11y, shared UI foundation | ✅ Complete |
-| P3+ | **Module 1 premium reader** (see below) | ✅ Complete |
+| P3+ | Phase-1 premium reader — Modules 1–6 on the generalized `Module1Reader` | ✅ Complete |
+| P3+ | Topic-level progression (`topic_progress`, completion model, resume) | ✅ Complete |
+| P3+ | Module-completion modal, dashboard resume, silent-failure/toast pass | ✅ Complete |
 
-### Module 1 premium reader (current flagship)
+### Phase-1 premium reader + this arc (current flagship)
 
-A data-driven lesson experience for Module 1 — **dark course rail + light reading
-canvas** — that replaced the old slide blob. Built across several sessions:
+A data-driven lesson experience — **dark course rail + light reading canvas** — in
+`src/components/Module1Reader.tsx` for all Phase-1 modules (Phase 2+ still use
+`LessonWorkspace.tsx`). Built across several sessions:
 
-- `LessonWorkspace.tsx`: dark `CourseSidebar` (active/done/locked states, module
+- Reader chrome: dark `CourseSidebar` (active/done/locked states, module
   progress, unlock card), `CourseTopBar` (progress + account actions), breadcrumb
   + large red lesson number header, prev/up-next/next nav, mobile drawer.
 - Visual block system + central `VisualBlockRenderer`: timeline, key_facts,
@@ -44,14 +50,34 @@ canvas** — that replaced the old slide blob. Built across several sessions:
   → `2026062600000*`. **All lesson facts sourced from the original content; only
   presentation is new** (see [MEMORY.md](MEMORY.md)).
 
+**This arc (`phase1-lms-redesign`) added:**
+
+- **Topic-level progression** — `topic_progress` (own-row RLS) + completion model
+  in `src/lib/completion.ts` (per-topic rules, weighted) rolling up into
+  `lesson_progress` (unlock authority unchanged); resume =
+  first-incomplete-required → last-visited → first-topic. Migration
+  `supabase/migrations/20260627000003_topic_progress.sql`.
+- **Module-completion modal** — `src/components/ModuleCompleteModal.tsx`. End CTA
+  "Mark Module Complete" → marks complete, unlocks next, shows an Award modal
+  (real objective = the lesson's authored "Goal", course-wide X/N, "Module N
+  unlocked"); Continue, or Back to Dashboard / ESC. No confetti. Wired in
+  `CourseDetail.markCompleteAndContinue`.
+- **Dashboard "Continue Learning" fix** — the `enrollments → courses(...)` embed
+  is an OBJECT; reading `courses[0]` left fields undefined → empty slug → dead
+  button. Now reads the object and deep-links to the resume lesson.
+- **No silent failures** — the toast system (`useToast`) is now wired across
+  enroll, assessments, certificate download, course-builder save, and admin
+  actions (loading → disabled + spinner; errors → toast). `api.ts` upserts pass
+  `onConflict` (natural key).
+
 ### Next Phase / step
 
-- **Migrate Modules 2–6** off the legacy hardcoded `MODULE_SLIDES` in
-  `SalesOnboardingCourse.tsx` into JSON blocks + the new reader (one module at a
-  time). Everything (sidebar, icons, illustrations, layout engine) is reusable.
-- Remaining P3 items: toast notifications, `src/components/ui/` library
-  completion, AdminPanel responsive/sort-filter, generated Supabase types.
-- Optional: wire the top-bar account actions (avatar/notifications) to real data.
+- **Extend to Phase 2+** (modules still on `LessonWorkspace`): the completion
+  modal already fires there; migrate their content/visuals to the premium reader
+  when ready.
+- **Held (need explicit go):** auto knowledge-checks, flashcards (canonical
+  content only), large visual refactors.
+- Optional: generated Supabase types; wire top-bar account actions to real data.
 
 ---
 
@@ -91,7 +117,7 @@ src/
 |------|----------|----------|
 | No generated TypeScript types from Supabase schema | P3 | AI_CODE_REVIEW.md |
 | `any` in useMutation error handlers | P3 | AI_CODE_REVIEW.md |
-| No toast notifications — mutations give no visual feedback | P3 | UX_AUDIT.md |
+| ~~No toast notifications~~ → toast system wired app-wide (this arc) | ✅ Done | UX_AUDIT.md |
 | AdminPanel lacks sort/filter | P4 | UX_AUDIT.md |
 | No staging environment | Before P4 launch | DEPLOYMENT_GUIDE.md |
 | No error tracking (Sentry) | P4 | OBSERVABILITY.md |

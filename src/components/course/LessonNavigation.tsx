@@ -31,9 +31,15 @@ export function LessonNavigation({
       <button
         onClick={onPrev}
         disabled={prevDisabled}
-        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-[#E6E5E0] text-[#5E555A] text-[14px] font-medium hover:bg-[#F2F1ED] disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237]"
+        className="group inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-[#E6E5E0] text-[#5E555A] text-[14px] font-medium
+          transition-[background-color,border-color,color,transform,box-shadow] duration-200 ease-out
+          enabled:hover:bg-[#FBEDED] enabled:hover:border-[#ED3237]/45 enabled:hover:text-[#221B1D] enabled:hover:-translate-y-px enabled:hover:shadow-sm
+          enabled:active:translate-y-px enabled:active:shadow-none enabled:active:duration-100
+          disabled:opacity-40 disabled:cursor-not-allowed
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1
+          motion-reduce:transition-none motion-reduce:enabled:hover:translate-y-0 motion-reduce:enabled:active:translate-y-0"
       >
-        <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+        <ChevronLeft className="w-4 h-4 transition-transform duration-150 group-hover:-translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" />
         Previous
       </button>
 
@@ -49,13 +55,19 @@ export function LessonNavigation({
       <button
         onClick={onNext}
         disabled={busy}
-        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-[14px] font-semibold transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-60"
+        className="group inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-[14px] font-semibold
+          transition-[background-color,box-shadow,transform] duration-150 ease-out
+          enabled:hover:-translate-y-px enabled:hover:brightness-[1.07] enabled:hover:shadow-[0_8px_20px_rgba(237,50,55,0.42)]
+          enabled:active:translate-y-0 enabled:active:brightness-95 enabled:active:shadow-[0_1px_5px_rgba(237,50,55,0.3)] enabled:active:duration-100
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1
+          disabled:opacity-60 disabled:cursor-wait
+          motion-reduce:transition-none motion-reduce:enabled:hover:translate-y-0"
         style={{ background: ACCENT, boxShadow: '0 1px 6px rgba(237,50,55,0.25)' }}
       >
         {busy ? 'Saving…' : (
           <>
             {nextLabel}
-            <ChevronRight className="w-4 h-4" aria-hidden="true" />
+            <ChevronRight className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" />
           </>
         )}
       </button>

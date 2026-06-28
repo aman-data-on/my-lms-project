@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw, Layers } from 'lucide-react';
 import type { FlashcardData } from '../../lib/blocks';
 import { cn } from '../../lib/cn';
-import { ACCENT, BlockFallback, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
+import { ACCENT, BlockFallback, PRESSABLE, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
 
 // Term → definition recall. Click/Enter flips; arrows move between cards.
 export function Flashcards({ data, surface }: { data: FlashcardData; surface: Surface }) {
@@ -24,7 +24,11 @@ export function Flashcards({ data, surface }: { data: FlashcardData; surface: Su
           aria-pressed={flipped}
           aria-label={flipped ? 'Show term' : 'Reveal answer'}
           className={cn(
-            'w-full min-h-[150px] rounded-2xl flex flex-col items-center justify-center text-center px-6 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237]',
+            'group w-full min-h-[150px] rounded-2xl flex flex-col items-center justify-center text-center px-6 py-6 cursor-pointer',
+            'transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out',
+            'hover:border-[#ED3237]/50 hover:shadow-lg hover:-translate-y-1 active:translate-y-0 active:scale-[0.99] active:duration-100',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1',
+            'motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100',
             t.card,
           )}
           style={flipped ? { background: withAlpha(ACCENT, t.isDark ? '1A' : '0D'), borderColor: withAlpha(ACCENT, '40') } : undefined}
@@ -33,15 +37,15 @@ export function Flashcards({ data, surface }: { data: FlashcardData; surface: Su
             {flipped ? 'Answer' : 'Term'}
           </span>
           <span className={cn('text-[16px] font-medium leading-snug', t.textPrimary)}>{flipped ? card.back : card.front}</span>
-          <span className={cn('mt-3 inline-flex items-center gap-1 text-[11px]', t.textMuted)}>
-            <RotateCcw className="w-3 h-3" aria-hidden="true" /> tap to flip
+          <span className={cn('mt-3 inline-flex items-center gap-1 text-[11px] transition-colors group-hover:text-[#221B1D]', t.textMuted)}>
+            <RotateCcw className="w-3 h-3 transition-transform duration-300 group-hover:-rotate-45 motion-reduce:transition-none motion-reduce:group-hover:rotate-0" aria-hidden="true" /> tap to flip
           </span>
         </button>
         <div className="flex items-center gap-2 mt-3">
-          <button type="button" onClick={() => go(-1)} aria-label="Previous card" className={cn('p-2 rounded-lg', t.chip)}>
+          <button type="button" onClick={() => go(-1)} aria-label="Previous card" className={cn('p-2 rounded-lg cursor-pointer hover:border-[#E4BEBC] hover:text-[#221B1D] hover:-translate-y-px active:translate-y-0', t.chip, PRESSABLE)}>
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button type="button" onClick={() => go(1)} aria-label="Next card" className={cn('p-2 rounded-lg', t.chip)}>
+          <button type="button" onClick={() => go(1)} aria-label="Next card" className={cn('p-2 rounded-lg cursor-pointer hover:border-[#E4BEBC] hover:text-[#221B1D] hover:-translate-y-px active:translate-y-0', t.chip, PRESSABLE)}>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

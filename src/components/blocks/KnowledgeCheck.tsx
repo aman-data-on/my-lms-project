@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { HelpCircle, Check, X } from 'lucide-react';
 import type { KnowledgeCheckData, KCQuestion } from '../../lib/blocks';
 import { cn } from '../../lib/cn';
-import { ACCENT, BlockFallback, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
+import { ACCENT, BlockFallback, PRESSABLE, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
 
 // Inline self-check after a meaningful concept. Reveals correctness on answer.
 export function KnowledgeCheck({ data, surface }: { data: KnowledgeCheckData; surface: Surface }) {
@@ -51,7 +51,12 @@ function Question({ q, surface }: { q: KCQuestion; surface: Surface }) {
               type="button"
               disabled={answered}
               onClick={() => setSelected(i)}
-              className={cn('w-full flex items-center justify-between gap-2 text-left px-3 py-2.5 rounded-lg text-[13px] transition-colors', cls, t.textPrimary)}
+              className={cn(
+                'w-full flex items-center justify-between gap-2 text-left px-3 py-2.5 rounded-lg text-[13px]',
+                cls, t.textPrimary, PRESSABLE,
+                !answered && 'cursor-pointer enabled:hover:border-[#ED3237]/55 enabled:hover:bg-[#FFF1F0] enabled:hover:-translate-y-px enabled:hover:shadow-md enabled:hover:text-[#221B1D]',
+                answered && 'cursor-default',
+              )}
               style={style}
             >
               <span>{opt}</span>

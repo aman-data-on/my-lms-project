@@ -1,5 +1,98 @@
 # Changelog
 
+## Phase-1 arc — topic progression, completion modal, dashboard resume, no silent failures (2026-06-28)
+
+- **Topic-level progression**: new `topic_progress` table (own-row RLS) + a completion model ([src/lib/completion.ts](../src/lib/completion.ts), per-topic rules + weighting) that rolls up into `lesson_progress` (still the unlock authority); resume = first-incomplete-required → last-visited → first-topic. Migration [20260627000003_topic_progress.sql](../supabase/migrations/20260627000003_topic_progress.sql). Backward-compatible, no backfill.
+- **Module-completion modal** ([src/components/ModuleCompleteModal.tsx](../src/components/ModuleCompleteModal.tsx)): the lesson end CTA is now "Mark Module Complete" → marks complete + unlocks next + shows an Award modal instead of auto-navigating. Real learning objective (the lesson's authored "Goal"), course-wide X/N progress, "Module N unlocked"; Continue, or Back to Dashboard / ESC / backdrop. Focus-trapped, responsive, ease-out, no confetti. Wired in `CourseDetail.markCompleteAndContinue`.
+- **Dashboard "Continue Learning" fix**: the `enrollments → courses(...)` embed is an object, but the code read `courses[0]` → undefined id/title → empty slug → `navigate('/course/')` bounced back to the dashboard. Now reads the embed as an object and deep-links to the resume lesson (new users → Module 1, Topic 1); the router guards empty slugs ([src/lib/api.ts](../src/lib/api.ts), [src/App.tsx](../src/App.tsx), [src/pages/Dashboard.tsx](../src/pages/Dashboard.tsx)).
+- **No silent failures**: wired the previously-unused toast system across enroll, assessment start/submit/create, certificate download, course-builder save, and admin delete/toggle/save-user. Standard everywhere: loading → disabled + spinner; error → toast; validation → message (not a silent `return`); success only on confirmed success; never a clickable button that goes nowhere. `api.ts` upserts now pass `onConflict` (was 409-ing on existing rows).
+- `tsc` 0 errors, `npm run build` passes. Branch `phase1-lms-redesign` (PR into `main`).
+
+## Progression — sequential unlock + URL access guard (2026-06-27)
+
+- Sequential module/phase unlock and resume were already derived from persisted `lesson_progress` (a module unlocks only when the previous is complete; phases unlock implicitly because phases are contiguous module ranges; "Continue Learning" resumes at the first incomplete module). This pass closes the gaps so the sequence can't be bypassed and the locked state is clear everywhere.
+- **Access guard** ([src/pages/CourseDetail.tsx](../src/pages/CourseDetail.tsx)): the reader now redirects to the overview if the requested lesson is locked (or the slug is invalid) — typing a locked lesson's URL no longer bypasses progression. Verified live: locked Module 9 URL → redirected; current Module 8 URL → opens.
+- **No-bounce auto-advance**: on completing a module, progress is optimistically written to the query cache before navigating, so the just-unlocked next module passes the guard immediately (no race with the refetch). Completion still persists to the DB, invalidates progress, shows the confetti + "Happy Learning" toast, and navigates to the next module.
+- **Locked-state UI**: Module 1 reader rail now shows a lock on locked phases and tooltips on locked phases/modules/topics ("Complete Phase N to unlock" / "Complete Module N to unlock"), keeps locked items disabled (reduced opacity), and only navigates into accessible modules ([src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx)). Overview curriculum already showed locks/opacity/hints; added matching tooltips on locked module rows ([src/components/CourseIndex.tsx](../src/components/CourseIndex.tsx)).
+- Data integrity: unlocking is driven entirely by persisted progress, so refresh/logout/device changes preserve completed + unlocked + current position. (Progression granularity is module-level — the persisted unit; topics are read in order within a module, and there are no knowledge-check blocks to gate yet.)
+- `tsc` 0 errors, `npm run build` passes.
+
+## Icons — fix empty KPI slot + section-heading icons (2026-06-27)
+
+- Bug: the "Global Presence" key-fact rendered an empty box — its data icon was `servers`, which wasn't in the registry (only `server`), so it resolved to nothing.
+- Registry ([src/components/blocks/icons.tsx](../src/components/blocks/icons.tsx)): added `servers` + semantic aliases (team, customer, security, performance, features, benefits, architecture, comparison, company, chip) — all mapping to already-imported Lucide icons. One library, no emoji.
+- Reader ([src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx)): `BIcon` now falls back to a neutral icon instead of an empty slot (can never ship a blank box again); added semantic icons to every section heading (Building / Cloud / Layers / Clock / Boxes / TrendingUp / Users / Share2) and the hero eyebrow.
+- Semantics ([supabase/migrations/20260627000002_module1_global_icon.sql](../supabase/migrations/20260627000002_module1_global_icon.sql), **pushed**): "Global Presence" now uses `globe` instead of `servers` (Global → Globe).
+- Verified live: scan of all icon containers reports **0 empty**, 12 section-heading icons present; `tsc` 0 errors, `npm run build` passes.
+
+## Module 1 — Growth Timeline two-column + growth arc (2026-06-27)
+
+- The Growth Timeline topic was a left-aligned list with an empty right half. Made it two-column ([src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx)): left 50% keeps the timeline (years + events, tighter row spacing); right 50% is a new `GrowthArc` SVG.
+- `GrowthArc` (Option B): a rising trajectory built from the real timeline steps — a red growth line through all eras with labelled milestone dots (Founded 2006 → Rebrand 2009 → Global 2010–14 → CloudJiffy 2018 → Acquired 2023–24 → CloudPe 2024 → India 2025 → Today), a "GROWTH" axis, and a "22,000+ customers today" impact callout at the endpoint. All labels are real source data; the chart conveys the growth story on its own.
+- Cool palette to match the reader; stacks to one column below 980px. `tsc` 0 errors, `npm run build` passes; verified live (arc labels dumped from the DOM are all real).
+
+## Module 1 reader — fix split overlap + drop card persona tags (2026-06-27)
+
+- **Overlap**: a tall split-topic illustration (e.g. "What Leapswitch Provides") rode up into the section above it because section spacing depended on the heading's top margin, which the centered split absorbed — and the preceding `key_facts` strip has no heading. Fixed in [src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx): every `.m1-sec` now carries a uniform `margin-top`, the heading's top margin is removed, and split sections are `align-items:start` (illustration top-aligns with the heading). Verified: 0 overlapping sections.
+- **Eyebrow/persona tag**: removed the per-card persona label (AI / ML, GOVERNMENT, …) from the use-case cards — cards now show icon + title + description only. Verified: 0 persona tags remain.
+- `tsc` 0 errors, `npm run build` passes.
+
+## Phase 1 — real, self-explanatory diagrams (2026-06-27)
+
+- Problem: the `TopicIllustration` SVGs added in the redesign were generic skeletons (gray placeholder bars, no real labels) — decorative, not instructional.
+- Fix: extended `TopicIllustration` ([src/components/course/TopicIllustration.tsx](../src/components/course/TopicIllustration.tsx)) with a `content` prop + a `LabeledDiagram` renderer that draws **actual text** in four shapes — `flow` (ordered steps), `stack` (named layers + items), `hub` (centre + labelled satellites), `pillars` (titled columns) — tone-aware, plus a `plain` Frame mode. No new component.
+- Module 1 reader ([src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx)): hero + all 4 text topics now pass real, source-derived labels:
+  - Hero / "Who We Are — CloudPe": **flow** Leapswitch → CloudPe → Customers (with what each does).
+  - "Who We Are — Leapswitch": **hub** Leapswitch → Startups / Enterprises / Government / Tech companies.
+  - "What Leapswitch Provides": **stack** Cloud & app platforms (CloudPe, CloudJiffy) / Managed & protection / Core infrastructure (Compute, Storage, Network, Colocation).
+  - "CloudPe in Practice": **hub** CloudPe → Predictable pricing / India-hosted / Enterprise support / AI-ready.
+- Modules 2–6 (`LessonWorkspace`): stopped shipping the generic skeleton beside text when the topic already has a real teaching block (process flow, comparison, etc.); the module-overview hero now renders the **actual topic names** as a labelled flow instead of a skeleton.
+- Verified live: M1 diagram text dumped from the DOM shows real labels (Leapswitch, CloudPe, Customers, Startups, "Core infrastructure: Compute · Storage · Network · Colocation", …); M2 overview hero shows real topic names; M2 topic pages report **0 content-free skeleton SVGs**. `tsc` 0 errors, `npm run build` passes. (No DB change — component-only; Modules 2–6 content migration was already pushed.)
+
+## Phase 1 redesign — two-column heroes + per-topic visuals (2026-06-27)
+
+- Audited every Module 1–6 topic (visual? layout? whitespace?), got approval, then applied the approved fixes.
+- **Module 1 reader** ([src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx)): hero is now two-column — content left (55%), instructional SVG right (45%) — fixing the empty right side. Every text topic over 20 words is now a two-column **text (55%) + concept illustration (45%)** layout; short text (<20 words) stays in a centered reading column (never stretched, no decorative filler). Architecture/timeline/ecosystem/comparison stay full-width. Responsive: stacks below 980px.
+- **Instructional SVGs**: reused the existing `TopicIllustration` library (no new component) and added a `tone='cool'` variant ([src/components/course/TopicIllustration.tsx](../src/components/course/TopicIllustration.tsx)) that flattens the two gradients to solids and retints the frame (panel/border/dots) to the Kinetic reader's cool palette. The default `rose` tone (used by Modules 2–6 / LessonWorkspace) is unchanged.
+- **Modules 2–6**: left on `LessonWorkspace` (which already renders a two-column hero + content-aware text+diagram layouts). The pending teaching-visuals migration [20260627000001_phase1_teaching_visuals.sql](../supabase/migrations/20260627000001_phase1_teaching_visuals.sql) was **pushed to the remote DB** — so every Module 2–6 topic now carries a learning artifact live.
+- Verified: `tsc` 0 errors, `npm run build` passes, and driven live in-browser at 1280px and 1024px — M1 hero + all 4 text topics show cool instructional SVGs (5 SVGs, 0 errors); Modules 2–6 confirmed block-based live and rendering their teaching visuals.
+
+## Phase 1 — every topic must teach (2026-06-27)
+
+- Rule applied: no topic may be text-only unless it's under 20 words; every topic over 20 words now carries at least one learning artifact, and every visual teaches (no decorative images/emoji). Applied first to **Phase 1 (Modules 1–6)**.
+- Module 1 already complied. Modules 2–6 were single plain-text HTML blobs (with prohibited emoji and inline-styled pseudo-cards) — each effectively one giant text-only topic. New migration [supabase/migrations/20260627000001_phase1_teaching_visuals.sql](../supabase/migrations/20260627000001_phase1_teaching_visuals.sql) rewrites their `video_url` into block content where each section's prose is paired with a teaching visual **derived only from the existing source facts** (no invented content):
+  - **M2 Cloud Market**: evolution `process_flow`, why-moved `feature_benefit`, deployment-model `use_case_cards`, future-trends `feature_benefit`, IaaS/PaaS/SaaS `comparison`, where-we-fit `architecture_diagram`.
+  - **M3 Infrastructure Portfolio**: infra-stack `architecture_diagram`, Bare-Metal/GPU `use_case_cards`, services `feature_benefit`, priority products `process_flow`.
+  - **M4 CloudPe Portfolio**: VPS/CloudJiffy `use_case_cards`, add-ons `feature_benefit`.
+  - **M5 Features & Value**: feature-vs-value `comparison`, Feature→Benefit→Value `process_flow`, value-mapping `feature_benefit`, challenge→solution + practice `scenario_cards`.
+  - **M6 Internal Team Structure**: 14-team `use_case_cards`, customer-priorities `feature_benefit`.
+- Icons come from the block registry (one icon system); emoji removed. A builder-side validator confirms every >20-word text topic is followed by a learning artifact.
+- Verified: rendered all 60 blocks through the real `VisualBlockRenderer` in a temporary harness (now removed) — 5 modules, **0 fallbacks, 0 render errors**; `tsc` 0 errors; `npm run build` passes.
+- ⚠️ Not yet live: the content ships as a migration — run `npx supabase db push` to apply it to the database (requires admin DB access, which the session did not have).
+
+## Module 1 reader — adaptive content width (2026-06-27)
+
+- Problem: the reader used one fixed `940px` content stage, so text and visuals alike were trapped in a narrow column with large empty side gutters on laptop/desktop.
+- Fix ([src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx)): made the stage container-relative (`.scroll` is now `container-type:inline-size`) and gave each section a width based on its content type — text/hero use a comfortable reading column (`--w-read: min(100%,820px)`), visuals break out wide (`--w-wide: min(100%,1520px)`) sharing the same left edge. Side padding scales with `clamp(20px,3.5cqi,56px)`.
+- Result (measured live): reading holds at ~820px everywhere; visuals scale 991px (1366) → 1209px (1600) → ~1408px (1920+), filling ~93% of the workspace on laptop/desktop and capping at ~1408 on ultra-wide so lines stay readable without huge gutters. Card/feature grids switched to `auto-fit minmax(...)` so they reflow (e.g. feature-benefit → 2 cols on laptop, 4 on wide). No hardcoded per-breakpoint widths — scales smoothly via `min()`/`clamp()`/container units.
+- Verified: `tsc` 0 errors, `npm run build` passes, screenshots at 1366/1600/1920/2560.
+
+## Module 1 reader — full course-hierarchy navigation (2026-06-27)
+
+- Summary: Replaced the Module 1 reader's flat rail with a GitBook/MS-Learn-style Phase → Module → Topic navigation in [src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx), fed by a `courseTree` built in [CourseDetail](../src/pages/CourseDetail.tsx) (`deriveTopics` parses every lesson's blocks so the tree shows all phases/modules/topics).
+- Behaviour: phases + modules are accordions (current phase + current module expanded by default, others collapsed); smooth max-height animation. **IntersectionObserver** scroll-spy highlights the current topic and auto-scrolls the active item into view; clicking a topic smooth-scrolls to its section (clicking a non-active module navigates to it). Footer **Next** advances topic-by-topic, then becomes "Mark complete / Next module" at the end.
+- Progress at every level: phase (completed-modules count + bar), module (completed-topics count), topic (completed ✓ / current / visited / upcoming / locked).
+- UX: sticky desktop rail with independent scroll; compact spacing; completed items get subtle green checks; active item has a red accent bar. Added a **mobile drawer** (hamburger + slide-in over a scrim + close) so the nav is reachable < 980px. `prefers-reduced-motion` respected.
+- Gotcha fixed: the accordion wrapper was renamed from `.collapse` to `.acc` — Tailwind's global `.collapse` utility (`visibility:collapse`) was hiding all nested nav content.
+- Verified: `tsc --noEmit` 0 errors, `npm run build` passes, driven live in-browser (login → Module 1) — 5 phases with correct counts, scroll-spy tracking confirmed, accordion + mobile drawer working.
+
+## Module 1 reader — Kinetic Enterprise design (2026-06-27)
+
+- Summary: Ported the "Kinetic Enterprise" design system ([docs/design/companyoverview.md](design/companyoverview.md)) into the live **Module 1 — Company Overview** reader. New self-contained component [src/components/Module1Reader.tsx](../src/components/Module1Reader.tsx), rendered by [CourseDetail](../src/pages/CourseDetail.tsx) only for the Company Overview lesson (`/company overview/i` + index 0); all other modules keep the standard `LessonWorkspace`.
+- Design: cool `#f6faff` surfaces, Obsidian `#293138` rail, Action Red `#b7102a` accent, Hanken Grotesk / Inter / JetBrains Mono (added the two new faces to [index.html](../index.html)). Single-scroll layout with scroll-spy rail; the growth timeline is the one motion moment (stagger-reveal, `prefers-reduced-motion` respected).
+- Content: driven entirely by the lesson's DB blocks (`lesson.video_url` JSON) — timeline, key facts, architecture layers, feature/benefit, ecosystem, use-case cards — via the shared icon registry ([blocks/icons.tsx](../src/components/blocks/icons.tsx)). No invented facts; hero headline/lead are framing copy only. All styles scoped under `.m1k` so the theme can't leak to other modules.
+- Verified: `tsc --noEmit` 0 errors, `npm run build` passes, and driven live in-browser (login → Module 1 reader) at desktop + 390px mobile — renders correctly, no console errors beyond the pre-existing best-effort `seed-users` 401.
+
 ## Phase 1 - Introduce router and API service (WIP)
 
 - Date: 2026-06-23

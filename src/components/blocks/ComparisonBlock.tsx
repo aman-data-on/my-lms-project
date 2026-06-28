@@ -1,7 +1,7 @@
 import { Scale } from 'lucide-react';
 import type { ComparisonData } from '../../lib/blocks';
 import { cn } from '../../lib/cn';
-import { ACCENT, BlockFallback, IconBubble, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
+import { ACCENT, BlockFallback, HOVER_CARD, IconBubble, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
 
 // Side-by-side comparison of two (or more) products / approaches / roles.
 // Columns stack on narrow screens so nothing is squeezed.
@@ -17,7 +17,7 @@ export function ComparisonBlock({ data, surface }: { data: ComparisonData; surfa
           const accent = col.accent || ACCENT;
           const points = Array.isArray(col.points) ? col.points.filter(Boolean) : [];
           return (
-            <div key={i} className={cn('rounded-xl overflow-hidden flex flex-col', t.card)}>
+            <div key={i} className={cn('group rounded-xl overflow-hidden flex flex-col', t.card, HOVER_CARD)}>
               <div
                 className="px-4 py-3 border-b flex items-center gap-2.5"
                 style={{ background: withAlpha(accent, t.isDark ? '14' : '0D'), borderColor: withAlpha(accent, '30') }}
@@ -32,7 +32,7 @@ export function ComparisonBlock({ data, surface }: { data: ComparisonData; surfa
                 {points.map((pt, j) => (
                   <li key={j} className="flex items-start gap-2">
                     <span className="mt-[7px] w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: accent }} aria-hidden="true" />
-                    <span className={cn('text-[13px] leading-relaxed', t.textSecondary)}>{pt}</span>
+                    <span className={cn('text-[13px] leading-relaxed transition-colors duration-200 group-hover:text-[#3A3338]', t.textSecondary)}>{pt}</span>
                   </li>
                 ))}
               </ul>

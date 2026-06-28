@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { safeHtml } from '../lib/sanitize';
 import type { BlockBase } from '../lib/blocks';
@@ -28,6 +28,12 @@ export interface LessonWorkspaceProps {
   isCurrentCompleted: boolean; isLastLesson: boolean; isCourseDone: boolean;
   /** Overall course progress for the top bar (0–100). */
   courseProgressPercent?: number;
+  /** Exact resume target within this lesson (topic key). */
+  resumeTopicKey?: string | null;
+  /** A topic page was opened (record visit / resume pointer). */
+  onTopicView?: (topicKey: string) => void;
+  /** A topic page was advanced past (reading completion). */
+  onTopicComplete?: (topicKey: string) => void;
   onBack: () => void; onMarkComplete: () => Promise<void>;
   onPrevLesson: () => void; onNextLesson: () => void; onAssessment: () => void;
 }
@@ -267,7 +273,9 @@ function TopicPage({
   } else if (placeDiagramBeside) {
     introRight = renderVisual(topic.visuals[sideDiagramIdx], 'side');
     sideConsumed = sideDiagramIdx;
-  } else if (sideDiagramIdx < 0 && !hasPair && hasProse) {
+  } else if (sideDiagramIdx < 0 && !hasPair && hasProse && topic.visuals.length === 0) {
+    // Only fall back to a generic illustration when the topic has NO real visual
+    // of its own — never ship a content-free skeleton beside real teaching blocks.
     introRight = <TopicIllustration title={topic.title} text={topic.leadHtml} />;
     introIsIllustration = true;
   }
@@ -372,14 +380,20 @@ function ModuleOverview({
           <button
             onClick={() => onSelectTopic(0)}
             aria-label={topics[0]?.title ? `Start lesson: ${topics[0].label} ${topics[0].title}` : 'Start lesson'}
-            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-[14px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-2"
+            className="group mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-[14px] font-semibold
+              transition-[transform,box-shadow,filter] duration-150 ease-out
+              hover:-translate-y-px hover:brightness-[1.06] hover:shadow-[0_6px_18px_rgba(237,50,55,0.38)]
+              active:translate-y-0 active:brightness-95
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-2
+              motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             style={{ background: '#ED3237', boxShadow: '0 1px 6px rgba(237,50,55,0.25)' }}
           >
-            Start lesson →
+            Start lesson <span className="transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">→</span>
           </button>
         </div>
         <div className="w-full lg:max-w-[460px] lg:justify-self-center">
-          <TopicIllustration title={moduleTitle} text={summary || ''} />
+          {/* Real module outline (actual topic names) instead of a generic skeleton. */}
+          <TopicIllustration title={moduleTitle} content={{ shape: 'flow', steps: topics.slice(0, 4).map((t) => ({ label: t.title })) }} />
         </div>
       </div>
 
@@ -395,15 +409,20 @@ function ModuleOverview({
             <li key={topic.id}>
               <button
                 onClick={() => onSelectTopic(i)}
-                className="group h-full w-full text-left flex items-start gap-3.5 rounded-xl border border-[#E6E5E0] bg-white hover:border-[#F1C9CB] hover:bg-[#FFFBFB] transition-colors px-4 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1"
+                className="group h-full w-full text-left flex items-start gap-3.5 rounded-xl border border-[#E6E5E0] bg-white px-4 py-4 cursor-pointer
+                  transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out
+                  hover:border-[#ED3237]/55 hover:bg-[#FFF7F6] hover:shadow-[0_18px_38px_-20px_rgba(237,50,55,0.42)] hover:-translate-y-[3px]
+                  active:translate-y-0 active:shadow-md active:duration-100
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1
+                  motion-reduce:transition-none motion-reduce:hover:translate-y-0"
               >
-                <span className="flex-shrink-0 mt-0.5 w-9 h-9 rounded-lg bg-[#FFF1F0] text-[#ED3237] text-[13px] font-bold flex items-center justify-center tabular-nums">
+                <span className="flex-shrink-0 mt-0.5 w-9 h-9 rounded-lg bg-[#FFF1F0] text-[#ED3237] text-[13px] font-bold flex items-center justify-center tabular-nums transition-[transform,background-color,color] duration-200 ease-out group-hover:scale-105 group-hover:bg-[#ED3237] group-hover:text-white motion-reduce:transition-none motion-reduce:group-hover:scale-100">
                   {topic.label}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[15px] font-semibold text-[#221B1D] leading-snug">{topic.title}</span>
+                  <span className="block text-[15px] font-semibold text-[#221B1D] leading-snug transition-colors duration-200 group-hover:text-[#ED3237]">{topic.title}</span>
                   {topic.preview && (
-                    <span className="block text-[13px] text-[#6B6E76] leading-snug mt-1 line-clamp-2">{topic.preview}</span>
+                    <span className="block text-[13px] text-[#6B6E76] leading-snug mt-1 line-clamp-2 transition-colors duration-200 group-hover:text-[#3A3338]">{topic.preview}</span>
                   )}
                 </span>
                 <span className="flex-shrink-0 self-center text-[#ED3237] translate-x-0 group-hover:translate-x-0.5 opacity-40 group-hover:opacity-100 transition-all text-[18px]">→</span>
@@ -422,6 +441,7 @@ export function LessonWorkspace({
   lesson, course, lessonIndex,
   isCurrentCompleted, isCourseDone,
   courseProgressPercent,
+  resumeTopicKey, onTopicView, onTopicComplete,
   onBack, onMarkComplete, onPrevLesson, onNextLesson, onAssessment,
 }: LessonWorkspaceProps) {
   const moduleNumber = lessonIndex + 1;
@@ -441,7 +461,17 @@ export function LessonWorkspace({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
 
-  useEffect(() => { setActive(-1); setMaxReached(-1); setSidebarOpen(false); }, [lesson.id]);
+  // Topic-progress emission (latest callbacks via ref; idempotent complete set).
+  const cbRef = useRef({ onTopicView, onTopicComplete });
+  cbRef.current = { onTopicView, onTopicComplete };
+  const emittedComplete = useRef<Set<string>>(new Set());
+  const didResume = useRef(false);
+
+  useEffect(() => {
+    setActive(-1); setMaxReached(-1); setSidebarOpen(false);
+    emittedComplete.current = new Set();
+    didResume.current = false;
+  }, [lesson.id]);
 
   const total = topics.length;
   const lastIndex = total - 1;
@@ -453,7 +483,30 @@ export function LessonWorkspace({
     setMaxReached(m => Math.max(m, i));
     setSidebarOpen(false);
     document.getElementById('lesson-scroll')?.scrollTo({ top: 0, behavior: 'auto' });
-  }, []);
+    // Record the visit, and mark every topic the learner moved past as complete.
+    const t = topics[i];
+    if (t) {
+      cbRef.current.onTopicView?.(t.id);
+      for (let j = 0; j < i; j++) {
+        const key = topics[j].id;
+        if (!emittedComplete.current.has(key)) {
+          emittedComplete.current.add(key);
+          cbRef.current.onTopicComplete?.(key);
+        }
+      }
+    }
+  }, [topics]);
+
+  // Restore the learner to their exact resume topic (one-shot per lesson; only
+  // when the key matches a topic in this lesson — a fresh lesson keeps overview).
+  useEffect(() => {
+    if (didResume.current || !resumeTopicKey) return;
+    const i = topics.findIndex((t) => t.id === resumeTopicKey);
+    if (i < 0) return;
+    didResume.current = true;
+    setActive(i);
+    setMaxReached((m) => Math.max(m, i));
+  }, [resumeTopicKey, topics]);
 
   const overallPercent = typeof courseProgressPercent === 'number'
     ? courseProgressPercent
@@ -489,7 +542,7 @@ export function LessonWorkspace({
     ? 'Next'
     : isCurrentCompleted
     ? (isCourseDone ? 'Take Assessment' : 'Next Module')
-    : 'Complete & Continue';
+    : 'Mark Module Complete';
 
   const prevDisabled = isOverview && lessonIndex === 0;
 

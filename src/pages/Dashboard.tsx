@@ -23,6 +23,8 @@ interface CourseWithProgress {
   duration: string;
   progress_percent: number;
   status: string;
+  /** Slug of the lesson to resume (first incomplete; first lesson for new users). */
+  resumeLessonSlug?: string | null;
 }
 
 interface ActivityItem {
@@ -197,14 +199,25 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string, d
                       <span className="font-medium text-primary-700">{continueCourse.progress_percent}%</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2">
-                      <div className="bg-primary-500 rounded-full h-2 transition-all" style={{ width: `${continueCourse.progress_percent}%` }} />
+                      <div className="bg-primary-600 rounded-full h-2 transition-all" style={{ width: `${continueCourse.progress_percent}%` }} />
                     </div>
                   </div>
                 </div>
                 <button
-                  onClick={() => onNavigate('course-detail', { courseId: continueCourse.id, courseTitle: continueCourse.title })}
+                  onClick={() => {
+                    if (!continueCourse.id) return;
+                    onNavigate('course-detail', {
+                      courseId: continueCourse.id,
+                      courseTitle: continueCourse.title,
+                      // Deep-link to the resume lesson; the reader resumes the
+                      // last incomplete topic. Falls back to the course overview
+                      // if a resume target couldn't be resolved.
+                      lessonSlug: continueCourse.resumeLessonSlug ?? undefined,
+                    });
+                  }}
+                  disabled={!continueCourse.id}
                   aria-label={`Continue: ${continueCourse.title}`}
-                  className="self-center inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1"
+                  className="self-center inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-primary-600"
                 >
                   Continue <ArrowRight className="w-4 h-4" aria-hidden="true" />
                 </button>

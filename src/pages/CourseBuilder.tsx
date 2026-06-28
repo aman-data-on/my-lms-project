@@ -69,6 +69,7 @@ export default function CourseBuilder({
   const [activeBlockPicker, setActiveBlockPicker] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [saveErr, setSaveErr] = useState('');
 
   function defaultLesson(): BuilderLesson {
     return { title: '', type: 'reading', video_url: null, duration: '', description: '', blocks: [newBlock('text')] };
@@ -260,7 +261,8 @@ export default function CourseBuilder({
 
   // ── Save ────────────────────────────────────────────────────────────
   const handleSave = async (status: 'draft' | 'published') => {
-    if (!courseForm.title.trim()) { setSaveMsg('Please enter a course title.'); return; }
+    setSaveErr('');
+    if (!courseForm.title.trim()) { setSaveErr('Please enter a course title.'); return; }
     setSaving(true);
     setSaveMsg('');
 
@@ -276,15 +278,22 @@ export default function CourseBuilder({
       status,
     };
 
-    if (editingCourseId) {
-      await supabase.from('courses').update({ ...coursePayload, status }).eq('id', editingCourseId);
-      await supabase.from('lessons').delete().eq('course_id', editingCourseId);
-    } else {
-      const { data } = await supabase.from('courses').insert(coursePayload).select().single();
-      courseId = data?.id;
-    }
+    try {
+      if (editingCourseId) {
+        const { error: updErr } = await supabase.from('courses').update({ ...coursePayload, status }).eq('id', editingCourseId);
+        if (updErr) throw updErr;
+        const { error: delErr } = await supabase.from('lessons').delete().eq('course_id', editingCourseId);
+        if (delErr) throw delErr;
+      } else {
+        const { data, error: insErr } = await supabase.from('courses').insert(coursePayload).select().single();
+        if (insErr) throw insErr;
+        courseId = data?.id;
+      }
 
-    if (courseId) {
+      // A missing courseId here means the insert silently returned nothing —
+      // surface it rather than reporting a false success.
+      if (!courseId) throw new Error('Could not resolve the saved course. Please try again.');
+
       let orderIndex = 0;
       for (const section of sections) {
         for (const lesson of section.lessons) {
@@ -296,7 +305,7 @@ export default function CourseBuilder({
           } else if (lesson.blocks.length > 0) {
             videoUrl = JSON.stringify(lesson.blocks);
           }
-          await supabase.from('lessons').insert({
+          const { error: lessonErr } = await supabase.from('lessons').insert({
             course_id: courseId,
             title: lesson.title,
             type: lesson.type,
@@ -305,13 +314,18 @@ export default function CourseBuilder({
             order_index: orderIndex++,
             section: section.name,
           });
+          if (lessonErr) throw lessonErr;
         }
       }
-    }
 
-    setSaving(false);
-    setSaveMsg(status === 'published' ? 'Course published successfully!' : 'Draft saved successfully!');
-    setTimeout(() => { setSaveMsg(''); onNavigate('admin'); }, 1500);
+      setSaving(false);
+      setSaveMsg(status === 'published' ? 'Course published successfully!' : 'Draft saved successfully!');
+      setTimeout(() => { setSaveMsg(''); onNavigate('admin'); }, 1500);
+    } catch (err: any) {
+      // Never report success on failure — show the real error and stay on the page.
+      setSaving(false);
+      setSaveErr(err?.message || 'Could not save the course. Please try again.');
+    }
   };
 
   if (!isAdmin) {
@@ -351,7 +365,9 @@ export default function CourseBuilder({
           </h2>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {saveMsg && <span className="text-sm text-green-600 mr-2 hidden sm:inline">{saveMsg}</span>}
+          {saveErr
+            ? <span className="text-sm text-red-600 mr-2">{saveErr}</span>
+            : saveMsg && <span className="text-sm text-green-600 mr-2 hidden sm:inline">{saveMsg}</span>}
           <button
             onClick={() => handleSave('draft')}
             disabled={saving}
@@ -362,7 +378,7 @@ export default function CourseBuilder({
           <button
             onClick={() => handleSave('published')}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-800 text-white text-sm font-medium rounded-lg hover:bg-primary-900 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-primary-700 text-white text-sm font-medium rounded-lg hover:bg-primary-800 disabled:opacity-50"
           >
             <Send className="w-4 h-4" /> Publish
           </button>

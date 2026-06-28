@@ -13,6 +13,26 @@ export type Surface = 'tinted' | 'plain';
 
 export const ACCENT = '#ED3237';
 
+// ─── Interaction language (shared so every surface feels consistent) ──────
+// Premium, restrained: short 150–200ms transitions, warm border, a soft shadow
+// and a 2px rise on hover; movement is removed under prefers-reduced-motion.
+
+/** Tangible hover for content cards (use-case / feature / comparison / scenario /
+ *  timeline). Multi-property so it reads at a glance: 3px lift, accent border, a
+ *  deeper accent-tinted shadow and a faint warm tint. Reserve for genuine content
+ *  cards — NOT purely informational KPI/stat readouts (keep those static). */
+export const HOVER_CARD =
+  'transition-[border-color,box-shadow,transform,background-color] duration-200 ease-out ' +
+  'hover:border-[#ED3237]/55 hover:bg-[#FFF7F6] hover:-translate-y-[3px] ' +
+  'hover:shadow-[0_18px_38px_-20px_rgba(237,50,55,0.42)] ' +
+  'motion-reduce:transition-none motion-reduce:hover:translate-y-0';
+
+/** Tactile press + keyboard focus ring for clickable surfaces (press is quick). */
+export const PRESSABLE =
+  'transition-[background-color,border-color,box-shadow,transform,color] duration-200 ease-out ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ED3237] focus-visible:ring-offset-1 ' +
+  'active:translate-y-px active:duration-100 motion-reduce:transition-none motion-reduce:active:translate-y-0';
+
 export interface SurfaceTokens {
   /** Retained for token-shape compatibility; both surfaces are light. */
   isDark: boolean;

@@ -45,7 +45,7 @@ export function ProgressBar({
       >
         <div
           aria-hidden="true"
-          className="bg-primary-500 rounded-full h-full transition-all duration-500 motion-reduce:transition-none"
+          className="bg-primary-600 rounded-full h-full transition-all duration-500 motion-reduce:transition-none"
           style={{ width: `${clamped}%` }}
         />
       </div>

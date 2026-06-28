@@ -1,7 +1,7 @@
 import { Users } from 'lucide-react';
 import type { UseCaseCardsData } from '../../lib/blocks';
 import { cn } from '../../lib/cn';
-import { ACCENT, BlockFallback, IconBubble, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
+import { ACCENT, BlockFallback, HOVER_CARD, IconBubble, tokensFor, withAlpha, VisualShell, type Surface } from './_shared';
 
 // Cards showing how different customer types / industries use a product.
 // Each card is vertically centred: icon badge on top, then persona, title and
@@ -17,15 +17,15 @@ export function UseCaseCards({ data, surface }: { data: UseCaseCardsData; surfac
         {cases.map((c, i) => {
           const accent = c.accent || ACCENT;
           return (
-            <div key={i} className={cn('rounded-xl p-4 h-full flex flex-col items-center justify-center text-center', t.card)}>
+            <div key={i} className={cn('group rounded-xl p-4 h-full flex flex-col items-center justify-center text-center', t.card, HOVER_CARD)}>
               <IconBubble icon={c.icon} accent={accent} surface={surface} size={44} />
               {c.persona && (
                 <p className="mt-3 text-[9px] font-mono font-bold uppercase tracking-[0.16em]" style={{ color: accent }}>
                   {c.persona}
                 </p>
               )}
-              <p className={cn('text-[14px] font-semibold leading-tight mt-1', t.textPrimary)}>{c.title}</p>
-              <p className={cn('text-[12.5px] leading-relaxed mt-1.5', t.textSecondary)}>{c.description}</p>
+              <p className={cn('text-[14px] font-semibold leading-tight mt-1 transition-colors duration-200', t.textPrimary)}>{c.title}</p>
+              <p className={cn('text-[12.5px] leading-relaxed mt-1.5 transition-colors duration-200 group-hover:text-[#3A3338]', t.textSecondary)}>{c.description}</p>
               <span className="mt-3 h-[2px] w-8 rounded-full" style={{ background: withAlpha(accent, '99') }} aria-hidden="true" />
             </div>
           );
