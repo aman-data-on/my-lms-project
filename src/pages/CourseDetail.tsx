@@ -630,7 +630,7 @@ export default function CourseDetail({
         }}
         onDismiss={() => {
           setCompletion(null);
-          onNavigate('dashboard');
+          goToOverview();
         }}
       />
     </>
